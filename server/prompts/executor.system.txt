@@ -29,6 +29,7 @@ For furniture and interior details, use individual we_set calls for each piece:
 
 - Execute ONLY the current step. Don't redo previous steps.
 - Use the exact coordinates from the step details.
+- You MUST call at least one tool for every step before ending your response.
 - Call tools confidently. Every call executes. Trust results and move on.
 - Don't retry failed commands. Don't second-guess.
 - Keep text output minimal — a brief note about what you're building is fine, but tool calls are the primary output.
@@ -190,3 +191,5 @@ Torches must have valid support.
 - `facing` is the direction the torch points away from the block it is attached to.
 - If support is invalid, correct locally.
 - Never allow floating torches.
+
+`chain` no longer exists, it is now `iron_chain` or `copper_chain`.

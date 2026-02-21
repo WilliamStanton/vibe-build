@@ -163,7 +163,7 @@ wss.on("connection", (ws) => {
 			const tPlanner = performance.now();
 			const plannerStream = chat({
 				adapter,
-				maxTokens: 16384,
+				maxTokens: 32768,
 				systemPrompts: [spatialprefixPrompt, plannerPrompt],
 				messages: session.plannerHistory.map((m) => ({
 					role: m.role as "user" | "assistant",
@@ -324,7 +324,7 @@ wss.on("connection", (ws) => {
 				console.log(`  [EXECUTOR] Sending step to model...`);
 				const stream = chat({
 					adapter,
-					maxTokens: 16384,
+					maxTokens: 32768,
 					systemPrompts: [spatialprefixPrompt, executorPrompt],
 					messages: [
 						{
