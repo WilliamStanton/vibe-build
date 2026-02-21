@@ -10,9 +10,14 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.4",
+		"@tanstack/ai": "^0.5.1",
+		"@tanstack/ai-anthropic": "^0.5.0",
+		"@tanstack/ai-gemini": "^0.5.0",
+		"@tanstack/ai-openai": "^0.5.0",
 		"@types/bun": "latest",
 		"@types/ws": "^8.18.1",
 		"typescript": "^5.9.3",
-		"ws": "^8.19.0"
+		"ws": "^8.19.0",
+		"zod": "^4.3.6"
 	}
 }
