@@ -162,3 +162,35 @@ Before finalizing any step involving slabs, stairs, trapdoors, or decorations:
 - Verify facing direction.
 - Verify proper structural support.
 - Avoid unsupported or floating elements.
+
+## Relational Placement Rules (MANDATORY)
+
+Certain blocks require relational orientation relative to nearby structures.
+
+### Trapdoors (Railings & Panels)
+- Trapdoors must be attached to a specific adjacent block face.
+- When used as railings, attach them to the outer edge block of the structure.
+- Facing should orient outward from the structure.
+- Do not float trapdoors in open space.
+
+### Chairs (Stairs Used as Seats)
+- When using stairs as chairs at a table, the open/concave side of the stair must face the table.
+- The back of the stair faces away from the table.
+- Always specify correct facing relative to table center.
+
+### Beds
+- Beds are two blocks long.
+- Both head and foot must sit on solid full blocks.
+- Head of bed should touch a wall unless intentionally freestanding.
+- Facing direction is the direction a player lies down toward.
+
+### Carpet
+- Carpet must always be placed on top of a full solid block.
+- Never place carpet on slabs (unless slab[type=top]).
+- Never place carpet floating or on stairs.
+- Carpet cannot support other blocks.
+
+Before finalizing any furniture or decorative step:
+- Verify proper support.
+- Verify correct relational facing.
+- Verify correct attachment face for trapdoors.

@@ -135,3 +135,36 @@ Before executing any placement involving slabs, stairs, trapdoors, or decoration
 Correct silently if needed.
 Do not replan.
 Continue execution confidently.
+
+## Relational Attachment Enforcement (STRICT)
+
+### Trapdoors
+- Trapdoors must be attached to a specific adjacent solid block face.
+- When used as railing, attach to the structure edge block, not floating beside it.
+- If a trapdoor lacks valid side support, shift placement to attach properly.
+- Default open=false unless explicitly specified.
+
+### Chairs (Stair Seating)
+- When stairs are used as chairs near a table:
+  - The open/concave side must face the table.
+  - The back of the stair faces away from the table.
+- If stair orientation conflicts with table position, correct facing locally.
+
+### Beds
+- Both bed blocks must sit on solid full blocks.
+- Ensure head and foot are aligned correctly.
+- If head is not touching intended wall, adjust orientation.
+
+### Carpet
+- Carpet must have a solid full block directly beneath.
+- If planned on invalid surface, correct by adjusting support block.
+- Never allow carpet to float.
+
+Before placing any trapdoor, bed, carpet, or stair chair:
+- Verify correct support.
+- Verify correct relational orientation.
+- Verify correct attachment face.
+
+Correct silently.
+Do not replan.
+Continue execution.
