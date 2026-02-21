@@ -536,104 +536,6 @@ export const forestGen = toolDefinition({
 	outputSchema: weResult,
 });
 
-// ── Clipboard Commands ──
-
-export const copy = toolDefinition({
-	name: "we_copy",
-	description:
-		"Copy a cuboid region to the clipboard. The clipboard remembers position relative to the copy — this affects where paste places it.",
-	inputSchema: z.object({
-		pos1: vec3.describe("First corner of the region to copy"),
-		pos2: vec3.describe("Opposite corner of the region to copy"),
-		mask: mask
-			.optional()
-			.describe("Only copy blocks matching this mask; non-matching become air"),
-	}),
-	outputSchema: weResult,
-});
-
-export const cut = toolDefinition({
-	name: "we_cut",
-	description:
-		"Cut a cuboid region to the clipboard (copy + delete original). The original area is filled with air or a specified pattern.",
-	inputSchema: z.object({
-		pos1: vec3.describe("First corner of the region to cut"),
-		pos2: vec3.describe("Opposite corner of the region to cut"),
-		leavePattern: pattern
-			.optional()
-			.describe("Pattern to fill the vacated area with (default: air)"),
-		mask: mask
-			.optional()
-			.describe("Only cut blocks matching this mask; non-matching become air"),
-	}),
-	outputSchema: weResult,
-});
-
-export const paste = toolDefinition({
-	name: "we_paste",
-	description:
-		"Paste the clipboard contents into the world. By default, pastes relative to where you were when you copied. Use atOrigin=true to paste at the original copy location.",
-	inputSchema: z.object({
-		position: vec3.describe("Position to paste at"),
-		ignoreAir: z
-			.boolean()
-			.optional()
-			.describe(
-				"If true, do not paste air blocks — existing blocks show through",
-			),
-		atOrigin: z
-			.boolean()
-			.optional()
-			.describe(
-				"If true, paste at the original copy position, ignoring current position",
-			),
-		selectAfter: z
-			.boolean()
-			.optional()
-			.describe("If true, set selection to the pasted area"),
-		mask: mask.optional().describe("Only paste blocks matching this mask"),
-	}),
-	outputSchema: weResult,
-});
-
-export const rotate = toolDefinition({
-	name: "we_rotate",
-	description:
-		"Rotate the clipboard contents. Angles must be multiples of 90 degrees. Positive angles = clockwise. Multiple rotations can be stacked.",
-	inputSchema: z.object({
-		rotateY: z
-			.number()
-			.describe(
-				"Rotation around Y axis (horizontal rotation) in degrees. Must be multiple of 90.",
-			),
-		rotateX: z
-			.number()
-			.optional()
-			.describe(
-				"Rotation around X axis (vertical tilt, north/south) in degrees. Must be multiple of 90.",
-			),
-		rotateZ: z
-			.number()
-			.optional()
-			.describe(
-				"Rotation around Z axis (vertical tilt, east/west) in degrees. Must be multiple of 90.",
-			),
-	}),
-	outputSchema: weResult,
-});
-
-export const flip = toolDefinition({
-	name: "we_flip",
-	description:
-		"Flip (mirror) the clipboard contents across a plane. north/south flips across XY plane, east/west across YZ plane, up/down across XZ plane.",
-	inputSchema: z.object({
-		direction: direction.describe(
-			"Direction to flip across: north/south = XY plane, east/west = YZ plane, up/down = XZ plane",
-		),
-	}),
-	outputSchema: weResult,
-});
-
 // ── History Commands ──
 
 export const undo = toolDefinition({
@@ -705,43 +607,6 @@ export const fillRecursive = toolDefinition({
 	outputSchema: weResult,
 });
 
-export const drain = toolDefinition({
-	name: "we_drain",
-	description:
-		"Drain a connected pool of water or lava within a radius. Only removes connected liquid from the starting position — separate pools in range are NOT drained.",
-	inputSchema: z.object({
-		position: vec3.describe("A position in or near the pool to drain"),
-		radius: z.number().int().min(1).describe("Maximum radius to drain within"),
-		removeWaterlogged: z
-			.boolean()
-			.optional()
-			.describe("If true, also remove water from waterlogged blocks"),
-	}),
-	outputSchema: weResult,
-});
-
-export const fixWater = toolDefinition({
-	name: "we_fix_water",
-	description:
-		"Fix water within a radius by replacing flowing water blocks with stationary water. Useful for fixing broken water features after edits.",
-	inputSchema: z.object({
-		position: vec3.describe("Center position to fix water around"),
-		radius: z.number().int().min(1).describe("Radius to fix within"),
-	}),
-	outputSchema: weResult,
-});
-
-export const fixLava = toolDefinition({
-	name: "we_fix_lava",
-	description:
-		"Fix lava within a radius by replacing flowing lava blocks with stationary lava.",
-	inputSchema: z.object({
-		position: vec3.describe("Center position to fix lava around"),
-		radius: z.number().int().min(1).describe("Radius to fix within"),
-	}),
-	outputSchema: weResult,
-});
-
 export const snow = toolDefinition({
 	name: "we_snow",
 	description:
@@ -764,28 +629,6 @@ export const snow = toolDefinition({
 			.boolean()
 			.optional()
 			.describe("If true, stack snow layers for varying depth"),
-	}),
-	outputSchema: weResult,
-});
-
-export const thaw = toolDefinition({
-	name: "we_thaw",
-	description:
-		"Remove snow and ice from exposed surfaces in an area. The opposite of we_snow.",
-	inputSchema: z.object({
-		position: vec3.describe("Center position for thawing"),
-		radius: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Horizontal radius of the thaw area"),
-		height: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Vertical extent of the thaw cylinder"),
 	}),
 	outputSchema: weResult,
 });
@@ -894,44 +737,6 @@ export const replaceNear = toolDefinition({
 	outputSchema: weResult,
 });
 
-export const extinguish = toolDefinition({
-	name: "we_extinguish",
-	description:
-		"Remove all fire blocks near a position. Shortcut for removing fire specifically.",
-	inputSchema: z.object({
-		position: vec3.describe("Center position"),
-		radius: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Radius to extinguish within"),
-	}),
-	outputSchema: weResult,
-});
-
-// ── Schematic Commands ──
-
-export const schematicLoad = toolDefinition({
-	name: "we_schematic_load",
-	description:
-		"Load a schematic file into the clipboard. The schematic can then be pasted with we_paste.",
-	inputSchema: z.object({
-		filename: z.string().describe("Name of the schematic file to load"),
-	}),
-	outputSchema: weResult,
-});
-
-export const schematicSave = toolDefinition({
-	name: "we_schematic_save",
-	description: "Save the clipboard to a schematic file for later reuse.",
-	inputSchema: z.object({
-		filename: z.string().describe("Name of the schematic file to save"),
-		overwrite: z.boolean().optional().describe("Overwrite an existing file"),
-	}),
-	outputSchema: weResult,
-});
-
 // ── Sign Placement ──
 
 export const placeSign = toolDefinition({
@@ -1033,32 +838,18 @@ export const allWorldEditTools = [
 	cone,
 	generate,
 	forestGen,
-	// Clipboard
-	copy,
-	cut,
-	paste,
-	rotate,
-	flip,
 	// History
 	undo,
 	redo,
 	// Utility
 	fill,
 	fillRecursive,
-	drain,
-	fixWater,
-	fixLava,
 	snow,
-	thaw,
 	green,
 	removeAbove,
 	removeBelow,
 	removeNear,
 	replaceNear,
-	extinguish,
-	// Schematics
-	schematicLoad,
-	schematicSave,
 	// Sign placement
 	placeSign,
 ];
