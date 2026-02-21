@@ -54,6 +54,7 @@ Always set both `facing` and `half`. Example: `oak_stairs[facing=east,half=botto
 
 Use standard Minecraft block IDs. Include block states when orientation matters:
 - `oak_door[facing=north,half=lower]`, `oak_door[facing=north,half=upper]`
+- `oak_trapdoor[facing=north,half=bottom,open=false]`, `oak_trapdoor[facing=north,half=top,open=true]`
 - `oak_stairs[facing=east,half=bottom]`, `oak_stairs[facing=east,half=top]`
 - `oak_slab[type=top]`, `oak_slab[type=bottom]`
 - `wall_torch[facing=south]`
