@@ -12,6 +12,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.LevelResource;
+
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Set;
 
 /**
@@ -46,43 +51,53 @@ public class BuildDimension {
     }
 
     /**
-     * Wipes the build dimension by setting all blocks in the previous build region to air.
-     * Uses direct chunk-level block setting for speed.
+     * Schedules cleanup of the build dimension after the player has left.
+     * Waits one tick for the teleport to complete, then saves, closes chunk IO,
+     * deletes region files, and reopens. Next time chunks load they'll be fresh void.
      */
-    public void resetBuildWorld(BuildSession session) {
-        ServerLevel buildLevel = server.getLevel(DIMENSION_KEY);
-        if (buildLevel == null) return;
-        if (session.buildMin == null || session.buildMax == null) return;
+    public void scheduleWorldCleanup() {
+        // Run on next server tick so the teleport finishes first
+        server.execute(() -> {
+            ServerLevel buildLevel = server.getLevel(DIMENSION_KEY);
+            if (buildLevel == null) return;
 
-        int minX = session.buildMin.getX(), maxX = session.buildMax.getX();
-        int minY = session.buildMin.getY(), maxY = session.buildMax.getY();
-        int minZ = session.buildMin.getZ(), maxZ = session.buildMax.getZ();
+            // Don't clean if someone is still in there
+            if (!buildLevel.players().isEmpty()) {
+                Vibebuild.LOGGER.info("[VB] Skipping cleanup — players still in build world");
+                return;
+            }
 
-        net.minecraft.world.level.block.state.BlockState air =
-                net.minecraft.world.level.block.Blocks.AIR.defaultBlockState();
+            try {
+                // Save and close chunk storage so file handles are released
+                buildLevel.getChunkSource().save(false);
+                buildLevel.getChunkSource().close();
 
-        int count = 0;
-        for (int x = minX; x <= maxX; x++) {
-            for (int z = minZ; z <= maxZ; z++) {
-                for (int y = minY; y <= maxY; y++) {
-                    BlockPos pos = new BlockPos(x, y, z);
-                    if (!buildLevel.getBlockState(pos).isAir()) {
-                        buildLevel.setBlock(pos, air, 2);
-                        count++;
+                // Delete region/entities/poi files
+                Path worldDir = server.getWorldPath(LevelResource.ROOT);
+                Path dimDir = worldDir.resolve("dimensions").resolve("vibe-build").resolve("build_world");
+
+                int deleted = 0;
+                for (String subdir : new String[]{"region", "entities", "poi"}) {
+                    Path dir = dimDir.resolve(subdir);
+                    if (Files.isDirectory(dir)) {
+                        File[] files = dir.toFile().listFiles();
+                        if (files != null) {
+                            for (File f : files) {
+                                if (f.delete()) deleted++;
+                            }
+                        }
                     }
                 }
+
+                Vibebuild.LOGGER.info("[VB] Build world cleanup: deleted {} files", deleted);
+            } catch (Exception e) {
+                Vibebuild.LOGGER.error("[VB] Build world cleanup failed: {}", e.getMessage(), e);
             }
-        }
-
-        Vibebuild.LOGGER.info("[VB] Reset build world: cleared {} blocks ({} -> {}) for {}",
-                count, session.buildMin, session.buildMax, session.playerName);
-
-        session.buildMin = null;
-        session.buildMax = null;
+        });
     }
 
-    public void teleportToBuildDimension(ServerPlayer player, BuildSession session) {
-        // Save full original state
+    /** Saves the player's current position, rotation, gamemode, and dimension. Called once at session start. */
+    public void savePlayerState(ServerPlayer player, BuildSession session) {
         session.originalDimension = player.level().dimension();
         session.originalX         = player.getX();
         session.originalY         = player.getY();
@@ -90,7 +105,9 @@ public class BuildDimension {
         session.originalYaw       = player.getYRot();
         session.originalPitch     = player.getXRot();
         session.originalGameMode  = player.gameMode.getGameModeForPlayer();
+    }
 
+    public void teleportToBuildDimension(ServerPlayer player, BuildSession session) {
         ServerLevel buildLevel = server.getLevel(DIMENSION_KEY);
         if (buildLevel == null) {
             Vibebuild.LOGGER.error("[VB] Build dimension '{}' not found! Is the data-pack installed?",
@@ -201,9 +218,13 @@ public class BuildDimension {
                 session.originalYaw, session.originalPitch,
                 false);
 
-        session.originalDimension = null;
+        // End the vibe world session
+        session.inVibeWorldSession = false;
         Vibebuild.LOGGER.info("[VB] Teleported {} back to {}",
                 session.playerName, originalLevel.dimension().toString());
+
+        // Schedule cleanup of the build dimension after teleport completes
+        scheduleWorldCleanup();
     }
 
     // ── Helpers ──

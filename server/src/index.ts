@@ -69,6 +69,8 @@ interface Session {
 
 const sessions = new Map<string, Session>();
 
+const getSuccessStatus = (success: boolean, message: string): string => JSON.stringify({ success, message });
+
 // ── Server ──
 
 wss.on("connection", (ws) => {
@@ -89,7 +91,7 @@ wss.on("connection", (ws) => {
 		if (msg.type === "tool_result" && msg.toolCallId) {
 			const resolve = session.pendingToolCalls.get(msg.toolCallId);
 			if (resolve) {
-				resolve(msg.result ?? '{"success":false,"message":"missing result"}');
+				resolve(msg.result ?? getSuccessStatus(false, "Missing result"));
 				session.pendingToolCalls.delete(msg.toolCallId);
 			}
 			return;
@@ -100,8 +102,8 @@ wss.on("connection", (ws) => {
 			console.log(`[${sessionId}] Client requested cancel`);
 			session.cancelled = true;
 			// Resolve any pending tool calls so the executor loop unblocks
-			for (const [id, resolve] of session.pendingToolCalls) {
-				resolve('{"success":false,"message":"Build cancelled by player"}');
+			for (const [_id, resolve] of session.pendingToolCalls) {
+				resolve(getSuccessStatus(false, "Build cancelled by player"));
 			}
 			session.pendingToolCalls.clear();
 			return;
@@ -180,6 +182,7 @@ wss.on("connection", (ws) => {
 					process.stdout.write(chunk.delta);
 					bufferDelta(chunk.delta);
 				} else if (chunk.type === "TOOL_CALL_START") {
+					flushText();
 					currentToolName = (chunk as { toolName?: string }).toolName ?? "";
 					if (currentToolName === "submit_plan") {
 						console.log(
