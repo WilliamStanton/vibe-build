@@ -932,6 +932,78 @@ export const schematicSave = toolDefinition({
 	outputSchema: weResult,
 });
 
+// ── Sign Placement ──
+
+export const placeSign = toolDefinition({
+	name: "place_sign",
+	description:
+		"Place a sign at a specific position with custom text. Use this instead of we_set for signs, since signs require special text handling that WorldEdit cannot do. Supports both wall-mounted and standing signs in any wood type.",
+	inputSchema: z.object({
+		position: vec3.describe("Position to place the sign"),
+		signType: z
+			.enum([
+				"oak",
+				"spruce",
+				"birch",
+				"jungle",
+				"acacia",
+				"dark_oak",
+				"cherry",
+				"mangrove",
+				"bamboo",
+				"crimson",
+				"warped",
+			])
+			.describe("Wood type for the sign"),
+		wallMounted: z
+			.boolean()
+			.describe(
+				"true = wall sign (attached to a block face), false = standing sign (on top of a block)",
+			),
+		facing: z
+			.enum(["north", "south", "east", "west"])
+			.describe(
+				"For wall signs: the direction the sign face points (away from the wall). For standing signs: the direction the sign text faces.",
+			),
+		frontLines: z
+			.array(z.string())
+			.max(4)
+			.describe(
+				"Up to 4 lines of text for the front of the sign. Empty strings for blank lines.",
+			),
+		backLines: z
+			.array(z.string())
+			.max(4)
+			.optional()
+			.describe("Up to 4 lines of text for the back of the sign (optional)"),
+		glowing: z
+			.boolean()
+			.optional()
+			.describe("If true, the sign text glows (like after using a glow ink sac)"),
+		color: z
+			.enum([
+				"black",
+				"white",
+				"red",
+				"green",
+				"blue",
+				"yellow",
+				"cyan",
+				"light_blue",
+				"magenta",
+				"orange",
+				"pink",
+				"purple",
+				"brown",
+				"light_gray",
+				"gray",
+			])
+			.optional()
+			.describe("Dye color for the sign text (default: black)"),
+	}),
+	outputSchema: weResult,
+});
+
 // ── Export ──
 
 // Keep this list explicit and grouped so prompt/tool auditing is straightforward.
@@ -987,4 +1059,6 @@ export const allWorldEditTools = [
 	// Schematics
 	schematicLoad,
 	schematicSave,
+	// Sign placement
+	placeSign,
 ];

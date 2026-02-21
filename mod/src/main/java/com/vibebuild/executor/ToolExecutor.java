@@ -15,7 +15,18 @@ import com.sk89q.worldedit.world.World;
 import com.vibebuild.Vibebuild;
 import com.vibebuild.session.BuildSession;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.StandingSignBlock;
+import net.minecraft.world.level.block.WallSignBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignText;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Routes tool_call messages from the vibe-build server to the WorldEdit Java API.
@@ -23,6 +34,17 @@ import net.minecraft.server.level.ServerPlayer;
 public class ToolExecutor {
 
     public JsonObject execute(ServerPlayer player, BuildSession session, String toolName, JsonObject args) {
+        // Handle non-WorldEdit tools that use native Minecraft API
+        if (toolName.equals("place_sign")) {
+            try {
+                String msg = execPlaceSign(player, args);
+                return result(true, msg);
+            } catch (Exception e) {
+                Vibebuild.LOGGER.error("[VB] Tool '{}' failed: {}", toolName, e.getMessage(), e);
+                return result(false, e.getMessage());
+            }
+        }
+
         try {
             World weWorld = FabricAdapter.adapt(player.level());
             Actor actor = FabricAdapter.adaptPlayer(player);
@@ -53,6 +75,9 @@ public class ToolExecutor {
                 int h = args.has("height")   ? args.get("height").getAsInt()   : 1;
                 expandBounds(session, center.offset(-r, 0, -r), center.offset(r, h, r));
             }
+
+            BlockPos position = pos(args, "position");
+            if (position != null) expandBounds(session, position, position);
         } catch (Exception ignored) {}
     }
 
@@ -291,6 +316,133 @@ public class ToolExecutor {
             count = es.replaceBlocks(region, (Mask) null, to);
         }
         return count + " blocks replaced";
+    }
+
+    // ── Sign Placement (native Minecraft API) ──
+
+    private String execPlaceSign(ServerPlayer player, JsonObject a) {
+        ServerLevel level = player.serverLevel();
+        BlockPos signPos = pos(a, "position");
+        String signType = str(a, "signType");
+        boolean wallMounted = a.has("wallMounted") && a.get("wallMounted").getAsBoolean();
+        String facing = str(a, "facing");
+
+        // Resolve sign block
+        Block signBlock = resolveSignBlock(signType, wallMounted);
+        BlockState state = signBlock.defaultBlockState();
+
+        if (wallMounted) {
+            net.minecraft.core.Direction dir = parseMinecraftDirection(facing);
+            state = state.setValue(WallSignBlock.FACING, dir);
+        } else {
+            int rotation = facingToStandingRotation(facing);
+            state = state.setValue(StandingSignBlock.ROTATION, rotation);
+        }
+
+        // Place the block
+        level.setBlockAndUpdate(signPos, state);
+
+        // Set text on the sign block entity
+        BlockEntity be = level.getBlockEntity(signPos);
+        if (be instanceof SignBlockEntity sign) {
+            // Front text
+            if (a.has("frontLines")) {
+                SignText front = sign.getFrontText();
+                var lines = a.getAsJsonArray("frontLines");
+                for (int i = 0; i < Math.min(lines.size(), 4); i++) {
+                    front = front.setMessage(i, Component.literal(lines.get(i).getAsString()));
+                }
+                // Apply color
+                if (a.has("color") && !a.get("color").isJsonNull()) {
+                    DyeColor color = parseDyeColor(str(a, "color"));
+                    front = front.setColor(color);
+                }
+                // Apply glow
+                if (a.has("glowing") && a.get("glowing").getAsBoolean()) {
+                    front = front.setHasGlowingText(true);
+                }
+                sign.setText(front, true);
+            }
+
+            // Back text
+            if (a.has("backLines") && !a.get("backLines").isJsonNull()) {
+                SignText back = sign.getBackText();
+                var lines = a.getAsJsonArray("backLines");
+                for (int i = 0; i < Math.min(lines.size(), 4); i++) {
+                    back = back.setMessage(i, Component.literal(lines.get(i).getAsString()));
+                }
+                if (a.has("color") && !a.get("color").isJsonNull()) {
+                    DyeColor color = parseDyeColor(str(a, "color"));
+                    back = back.setColor(color);
+                }
+                if (a.has("glowing") && a.get("glowing").getAsBoolean()) {
+                    back = back.setHasGlowingText(true);
+                }
+                sign.setText(back, false);
+            }
+
+            sign.setChanged();
+            // Notify clients of the block entity update
+            level.sendBlockUpdated(signPos, state, state, Block.UPDATE_ALL);
+        }
+
+        return "Sign placed at " + signPos.getX() + ", " + signPos.getY() + ", " + signPos.getZ();
+    }
+
+    private Block resolveSignBlock(String type, boolean wall) {
+        return switch (type.toLowerCase()) {
+            case "spruce"   -> wall ? Blocks.SPRUCE_WALL_SIGN   : Blocks.SPRUCE_SIGN;
+            case "birch"    -> wall ? Blocks.BIRCH_WALL_SIGN    : Blocks.BIRCH_SIGN;
+            case "jungle"   -> wall ? Blocks.JUNGLE_WALL_SIGN   : Blocks.JUNGLE_SIGN;
+            case "acacia"   -> wall ? Blocks.ACACIA_WALL_SIGN   : Blocks.ACACIA_SIGN;
+            case "dark_oak" -> wall ? Blocks.DARK_OAK_WALL_SIGN : Blocks.DARK_OAK_SIGN;
+            case "cherry"   -> wall ? Blocks.CHERRY_WALL_SIGN   : Blocks.CHERRY_SIGN;
+            case "mangrove" -> wall ? Blocks.MANGROVE_WALL_SIGN : Blocks.MANGROVE_SIGN;
+            case "bamboo"   -> wall ? Blocks.BAMBOO_WALL_SIGN   : Blocks.BAMBOO_SIGN;
+            case "crimson"  -> wall ? Blocks.CRIMSON_WALL_SIGN  : Blocks.CRIMSON_SIGN;
+            case "warped"   -> wall ? Blocks.WARPED_WALL_SIGN   : Blocks.WARPED_SIGN;
+            default         -> wall ? Blocks.OAK_WALL_SIGN      : Blocks.OAK_SIGN;
+        };
+    }
+
+    private int facingToStandingRotation(String facing) {
+        return switch (facing.toLowerCase()) {
+            case "south" -> 0;
+            case "west"  -> 4;
+            case "north" -> 8;
+            case "east"  -> 12;
+            default      -> 0;
+        };
+    }
+
+    private net.minecraft.core.Direction parseMinecraftDirection(String s) {
+        return switch (s.toLowerCase()) {
+            case "north" -> net.minecraft.core.Direction.NORTH;
+            case "south" -> net.minecraft.core.Direction.SOUTH;
+            case "east"  -> net.minecraft.core.Direction.EAST;
+            case "west"  -> net.minecraft.core.Direction.WEST;
+            default      -> net.minecraft.core.Direction.NORTH;
+        };
+    }
+
+    private DyeColor parseDyeColor(String s) {
+        return switch (s.toLowerCase()) {
+            case "white"      -> DyeColor.WHITE;
+            case "red"        -> DyeColor.RED;
+            case "green"      -> DyeColor.GREEN;
+            case "blue"       -> DyeColor.BLUE;
+            case "yellow"     -> DyeColor.YELLOW;
+            case "cyan"       -> DyeColor.CYAN;
+            case "light_blue" -> DyeColor.LIGHT_BLUE;
+            case "magenta"    -> DyeColor.MAGENTA;
+            case "orange"     -> DyeColor.ORANGE;
+            case "pink"       -> DyeColor.PINK;
+            case "purple"     -> DyeColor.PURPLE;
+            case "brown"      -> DyeColor.BROWN;
+            case "light_gray" -> DyeColor.LIGHT_GRAY;
+            case "gray"       -> DyeColor.GRAY;
+            default           -> DyeColor.BLACK;
+        };
     }
 
     // ── Helpers ──
