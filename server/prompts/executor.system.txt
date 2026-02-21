@@ -168,3 +168,13 @@ Before placing any trapdoor, bed, carpet, or stair chair:
 Correct silently.
 Do not replan.
 Continue execution.
+
+### Torches (STRICT)
+
+Torches must have valid support.
+
+- `torch` requires a solid full block directly beneath.
+- `wall_torch[facing=direction]` must attach to the side of a solid full block.
+- `facing` is the direction the torch points away from the block it is attached to.
+- If support is invalid, correct locally.
+- Never allow floating torches.

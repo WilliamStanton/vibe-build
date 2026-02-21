@@ -194,3 +194,13 @@ Before finalizing any furniture or decorative step:
 - Verify proper support.
 - Verify correct relational facing.
 - Verify correct attachment face for trapdoors.
+
+### Torches
+
+Torches require valid attachment.
+
+- `torch` must sit on a full solid block.
+- `wall_torch[facing=direction]` must attach to the side of a full solid block.
+- `facing` indicates the direction the torch points AWAY from the supporting block.
+- Never place torches on air, carpet, stairs, bottom slabs, or trapdoors.
+- Never allow floating torches.
