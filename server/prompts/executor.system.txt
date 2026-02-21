@@ -63,3 +63,24 @@ Use standard Minecraft block IDs. Include block states when orientation matters:
 - `furnace[facing=south,lit=false]`
 
 Coordinate system: X = east(+)/west(-), Y = height, Z = south(+)/north(-).
+
+## Structural Invariants (ENFORCED PER LEVEL)
+
+For any structure level defined by base_y:
+
+1. A door lower half must have a solid block directly beneath it.
+2. A door lower half must never share the same Y-level as that level's floor block (base_y).
+3. If a door is placed at base_y, shift it up by +1 automatically.
+4. When carving door openings, ensure BOTH:
+   - base_y + 1 is cleared
+   - base_y + 2 is cleared
+5. Furniture must not replace that level’s floor block.
+6. Stairs connecting levels must begin at walkable_surface of the lower level.
+
+If a planned coordinate violates these invariants:
+- Correct locally.
+- Do not replan.
+- Do not explain.
+- Continue execution.
+
+Preserve structural integrity across multiple vertical levels.

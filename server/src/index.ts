@@ -5,6 +5,7 @@ import { z } from "zod";
 import executorPrompt from "../prompts/executor.system.txt";
 import finalizerPrompt from "../prompts/finalizer.system.txt";
 import plannerPrompt from "../prompts/planner.system.txt";
+import spatialprefixPrompt from "../prompts/spatialprefix.system.txt";
 import { allWorldEditTools as allTools } from "./tools";
 
 const port = 8080;
@@ -161,7 +162,7 @@ wss.on("connection", (ws) => {
 			const plannerStream = chat({
 				adapter,
 				maxTokens: 16384,
-				systemPrompts: [plannerPrompt],
+				systemPrompts: [spatialprefixPrompt, plannerPrompt],
 				messages: session.plannerHistory.map((m) => ({
 					role: m.role as "user" | "assistant",
 					content: [{ type: "text" as const, content: m.content }],
@@ -321,7 +322,7 @@ wss.on("connection", (ws) => {
 				const stream = chat({
 					adapter,
 					maxTokens: 16384,
-					systemPrompts: [executorPrompt],
+					systemPrompts: [spatialprefixPrompt, executorPrompt],
 					messages: [
 						{
 							role: "user",

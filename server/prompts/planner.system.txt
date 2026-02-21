@@ -39,3 +39,42 @@ Each step should be one feature of the build. The `details` field is critical â€
 
 - Do NOT plan foundations for houses or small buildings. Start walls directly at ground level. Foundations make houses look like they're floating on pedestals. Only plan foundations for large-scale structures like castles or bridges where they make architectural sense.
 - When planning stairs (staircases, porches, roof trim), always specify the required `facing` direction in `details` so the executor gets it right.
+
+## Shared Structural Level Model (MANDATORY)
+
+All enclosed structures must define explicit structural levels.
+
+For each level (ground floor, second floor, tower level, basement, etc.), define:
+
+- level_name
+- base_y
+- wall_height
+
+Within each level:
+
+- floor_block = base_y
+- walkable_surface = base_y + 1
+- wall_base = base_y
+- door_lower_half = base_y + 1
+- door_upper_half = base_y + 2
+- ceiling_base = base_y + wall_height
+
+Rules for every level:
+
+1. Floors occupy base_y.
+2. Players stand at walkable_surface.
+3. Walls begin at base_y and extend upward wall_height blocks.
+4. Doors NEVER start at base_y.
+5. Door openings must be carved at:
+   - base_y + 1
+   - base_y + 2
+6. Furniture must sit on walkable_surface.
+7. Stairs connecting between levels must start at walkable_surface of the lower level.
+8. Ensure at least 2-block interior clearance above walkable_surface.
+
+Before finalizing coordinates for a level:
+- Verify doors do not overlap floor blocks.
+- Verify walls sit directly on that level's floor.
+- Verify ceiling and next level base_y do not conflict.
+
+Each level is spatially independent but vertically aligned.
