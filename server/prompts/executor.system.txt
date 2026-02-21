@@ -120,13 +120,25 @@ All placements must respect block occupancy and support rules.
 
 ---
 
+### Signs
+- WorldEdit's `set` cannot place signs with text. Always use the `place_sign` tool instead.
+- `wallMounted=true` for signs attached to a wall face; `facing` = the direction the sign text faces (away from the wall).
+- `wallMounted=false` for standing signs on top of a block; `facing` = the direction the sign text faces.
+- Wall signs need a solid block behind them (opposite of `facing`).
+- Standing signs need a solid block directly beneath.
+- Use `frontLines` for the visible text (up to 4 lines). Use `backLines` for text on the reverse side.
+- Keep sign text short — roughly 15 characters per line max, or it gets cut off.
+- For shop signs, labels, or decorative text, prefer wall signs mounted at eye level (base_y + 2).
+
+---
+
 ### Glass Panes
 Never use glass panes.
 If panes appear in the plan, replace with full glass blocks.
 
 ---
 
-Before executing any placement involving slabs, stairs, trapdoors, or decorations:
+Before executing any placement involving slabs, stairs, trapdoors, signs, or decorations:
 - Verify support block exists.
 - Verify correct half.
 - Verify correct facing.
