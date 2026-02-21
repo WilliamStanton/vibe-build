@@ -194,7 +194,7 @@ public class VbCommand {
             return 0;
         }
 
-        if (session.phase != BuildSession.Phase.CONNECTED) {
+        if (session.phase != BuildSession.Phase.CONNECTED && session.phase != BuildSession.Phase.REVIEWING) {
             player.sendSystemMessage(ChatUtil.vb("Busy -- wait for the current build to finish, or /vb cancel."));
             return 0;
         }
@@ -202,9 +202,17 @@ public class VbCommand {
         session.phase = BuildSession.Phase.PLANNING;
 
         // Capture current position as build origin hint
-        double x = player.getX();
-        double y = player.getY();
-        double z = player.getZ();
+        // (if in vibe world session, use saved original pos from the overworld)
+        double x, y, z;
+        if (session.inVibeWorldSession) {
+            x = session.originalX;
+            y = session.originalY;
+            z = session.originalZ;
+        } else {
+            x = player.getX();
+            y = player.getY();
+            z = player.getZ();
+        }
 
         player.sendSystemMessage(ChatUtil.vb("Sending: " + prompt));
         ws.sendPrompt(prompt, x, y, z);

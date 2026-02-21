@@ -102,14 +102,21 @@ public class VbWebSocketClient extends WebSocketClient {
         runOnServerThread(() -> {
             ServerPlayer player = playerSupplier.get();
             if (player == null) return;
+
             session.phase = BuildSession.Phase.PLANNING;
             player.sendSystemMessage(ChatUtil.vb("Planning your build..."));
 
-            // Clear any leftover blocks from a previous build
-            Vibebuild.getInstance().getBuildDimension().resetBuildWorld(session);
-
-            // Teleport to build dimension immediately so the player can watch from the start
-            Vibebuild.getInstance().getBuildDimension().teleportToBuildDimension(player, session);
+            if (!session.inVibeWorldSession) {
+                // === SESSION START ===
+                // Save player state and teleport in (world was cleaned on last session end)
+                session.inVibeWorldSession = true;
+                session.hasBeenPositioned = false;
+                session.buildMin = null;
+                session.buildMax = null;
+                Vibebuild.getInstance().getBuildDimension().savePlayerState(player, session);
+                Vibebuild.getInstance().getBuildDimension().teleportToBuildDimension(player, session);
+            }
+            // Reprompt during session — keep existing blocks and position
         });
     }
 
@@ -120,13 +127,14 @@ public class VbWebSocketClient extends WebSocketClient {
             ServerPlayer player = playerSupplier.get();
             if (player == null) return;
 
-            // Store origin so spectator repositions to face the build
-            if (origin != null) {
+            // Reposition once to face the build origin, then never again
+            if (origin != null && !session.hasBeenPositioned) {
                 int ox = origin.get("x").getAsInt();
                 int oy = origin.get("y").getAsInt();
                 int oz = origin.get("z").getAsInt();
                 session.buildOrigin = new net.minecraft.core.BlockPos(ox, oy, oz);
                 Vibebuild.getInstance().getBuildDimension().repositionToFaceBuild(player, session, ox, oy, oz);
+                session.hasBeenPositioned = true;
             }
 
             player.sendSystemMessage(ChatUtil.vb("Planning complete: " + stepCount + " features to build."));
@@ -250,9 +258,6 @@ public class VbWebSocketClient extends WebSocketClient {
             // Stay in the build dimension so the player can review the build
             session.phase = BuildSession.Phase.REVIEWING;
 
-            // Reposition to face the completed build
-            Vibebuild.getInstance().getBuildDimension().repositionToFaceBuild(player, session);
-
             String summary = String.format(
                 "Build complete! %d steps, %d commands.",
                 completedSteps, toolCount
@@ -280,10 +285,15 @@ public class VbWebSocketClient extends WebSocketClient {
         runOnServerThread(() -> {
             ServerPlayer player = playerSupplier.get();
             if (player == null) return;
-            session.phase = BuildSession.Phase.CONNECTED;
             player.sendSystemMessage(ChatUtil.vbError(content));
-            // Teleport back if we were in the build dimension
-            Vibebuild.getInstance().getBuildDimension().teleportBack(player, session);
+
+            if (session.inVibeWorldSession) {
+                // Stay in build world — player can reprompt or /vb cancel
+                session.phase = BuildSession.Phase.REVIEWING;
+                player.sendSystemMessage(ChatUtil.vb("You can reprompt or type /vb cancel to return."));
+            } else {
+                session.phase = BuildSession.Phase.CONNECTED;
+            }
         });
     }
 

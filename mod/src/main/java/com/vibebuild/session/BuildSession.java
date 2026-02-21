@@ -7,15 +7,19 @@ import net.minecraft.world.level.Level;
 
 /**
  * Holds all per-player state for a single vibe-build session.
+ *
+ * A "vibe world session" begins when the player sends a prompt from the overworld
+ * and ends only when they type /vb confirm or /vb cancel.
+ * During a session the player stays in the build dimension and can reprompt freely.
  */
 public class BuildSession {
 
     public enum Phase {
         IDLE,
         CONNECTED,
-        PLANNING,    // server is producing a plan, player still in their world
-        BUILDING,    // player is in the void build dimension watching the build
-        REVIEWING,   // build done, player still in build world reviewing it
+        PLANNING,    // server is producing a plan
+        BUILDING,    // executor is running tool calls
+        REVIEWING,   // build done, player reviewing in build world
         PREVIEWING   // player confirmed, back home, ghost preview active
     }
 
@@ -25,16 +29,25 @@ public class BuildSession {
     // Current phase
     public volatile Phase phase = Phase.CONNECTED;
 
-    // Where the player was before we teleported them to the build dimension
+    // ── Vibe world session state ──
+
+    /** True while the player is inside the build dimension (from first prompt until confirm/cancel). */
+    public boolean inVibeWorldSession = false;
+
+    /** Saved once at session start, restored once at session end. */
     public ResourceKey<Level> originalDimension;
     public double originalX, originalY, originalZ;
     public float originalYaw, originalPitch;
     public GameType originalGameMode;
 
-    // The region that was built in the build dimension (set when BUILDING starts)
+    // ── Build state ──
+
     public BlockPos buildOrigin;   // matches plan.origin from the server
     public BlockPos buildMin;      // bounding box min (populated during build)
     public BlockPos buildMax;      // bounding box max (populated during build)
+
+    /** True after the first reposition to face the build. Prevents repeated teleports. */
+    public boolean hasBeenPositioned = false;
 
     public BuildSession(String playerName) {
         this.playerName = playerName;
