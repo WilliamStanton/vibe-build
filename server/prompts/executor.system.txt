@@ -85,3 +85,53 @@ If a planned coordinate violates these invariants:
 - Continue execution.
 
 Preserve structural integrity across multiple vertical levels.
+
+## Block Geometry Enforcement (STRICT)
+
+All placements must respect block occupancy and support rules.
+
+### Slabs
+- type=bottom occupies lower half.
+- type=top occupies upper half.
+- Do not place furniture or pots on bottom slabs.
+- If a pot or decoration is planned above a bottom slab, replace the slab with a full block or convert to type=top.
+
+---
+
+### Stairs
+- Always specify both facing and half.
+- Bottom stairs occupy lower half.
+- Top stairs occupy upper half.
+- Roof trim must use half=top.
+- Ensure stairs are supported by solid blocks where visually required.
+
+---
+
+### Trapdoors
+- Default open=false unless specified.
+- Must have adjacent support.
+- Ensure correct half positioning.
+
+---
+
+### Flower Pots
+- Must have solid full block beneath OR slab[type=top].
+- If support is invalid, correct locally before placing.
+
+---
+
+### Glass Panes
+Never use glass panes.
+If panes appear in the plan, replace with full glass blocks.
+
+---
+
+Before executing any placement involving slabs, stairs, trapdoors, or decorations:
+- Verify support block exists.
+- Verify correct half.
+- Verify correct facing.
+- Prevent floating or unsupported geometry.
+
+Correct silently if needed.
+Do not replan.
+Continue execution confidently.
