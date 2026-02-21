@@ -12,6 +12,7 @@ import com.vibebuild.session.BuildSession;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
@@ -19,6 +20,7 @@ import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -76,6 +78,28 @@ public class Vibebuild implements ModInitializer {
             this.server         = s;
             this.buildDimension = new BuildDimension(s);
             LOGGER.info("[VB] vibe-build mod ready.");
+        });
+
+        // Auto-connect players to the WS server when they join
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, s) -> {
+            ServerPlayer player = handler.getPlayer();
+            String name = player.getName().getString();
+            if (sessions.containsKey(name)) return; // already connected
+
+            try {
+                BuildSession session = new BuildSession(name);
+                VbWebSocketClient ws = new VbWebSocketClient(
+                        new URI("ws://localhost:8080"),
+                        () -> this.server.getPlayerList().getPlayerByName(name),
+                        session
+                );
+                ws.connect();
+                sessions.put(name, session);
+                webSockets.put(name, ws);
+                LOGGER.info("[VB] Auto-connecting {} to vibe-build server", name);
+            } catch (Exception e) {
+                LOGGER.warn("[VB] Auto-connect failed for {}: {}", name, e.getMessage());
+            }
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(s -> {

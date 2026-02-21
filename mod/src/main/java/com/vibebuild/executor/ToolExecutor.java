@@ -321,7 +321,7 @@ public class ToolExecutor {
     // ── Sign Placement (native Minecraft API) ──
 
     private String execPlaceSign(ServerPlayer player, JsonObject a) {
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = (ServerLevel) player.level();
         BlockPos signPos = pos(a, "position");
         String signType = str(a, "signType");
         boolean wallMounted = a.has("wallMounted") && a.get("wallMounted").getAsBoolean();
