@@ -827,27 +827,15 @@ export const allWorldEditTools = [
 	stack,
 	smooth,
 	hollow,
-	forest,
-	flora,
 	deform,
-	revolve,
 	// Generation
 	cyl,
 	sphere,
 	pyramid,
 	cone,
 	generate,
-	forestGen,
-	// History
-	undo,
-	redo,
 	// Utility
 	fill,
-	fillRecursive,
-	snow,
-	green,
-	removeAbove,
-	removeBelow,
 	removeNear,
 	replaceNear,
 	// Sign placement

@@ -1,6 +1,8 @@
 package com.vibebuild.executor;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.sk89q.worldedit.EditSession;
 import com.sk89q.worldedit.WorldEdit;
 import com.sk89q.worldedit.extension.platform.Actor;
@@ -27,6 +29,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignText;
 import net.minecraft.world.level.block.state.BlockState;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Routes tool_call messages from the vibe-build server to the WorldEdit Java API.
@@ -93,6 +98,7 @@ public class ToolExecutor {
             case "we_center"       -> execCenter(es, world, actor, a);
             case "we_naturalize"   -> execNaturalize(es, world, a);
             case "we_line"         -> execLine(es, world, actor, a);
+            case "we_curve"        -> execCurve(es, world, actor, a);
             case "we_move"         -> execMove(es, world, actor, a);
             case "we_stack"        -> execStack(es, world, a);
             case "we_smooth"       -> execSmooth(es, world, a);
@@ -101,6 +107,7 @@ public class ToolExecutor {
             case "we_cyl"          -> execCyl(es, world, actor, a);
             case "we_sphere"       -> execSphere(es, world, actor, a);
             case "we_pyramid"      -> execPyramid(es, world, actor, a);
+            case "we_cone"         -> execCone(es, world, actor, a);
             case "we_generate"     -> execGenerate(es, world, actor, a);
             case "we_copy"         -> "copy requires actor";
             case "we_cut"          -> "cut requires actor";
@@ -183,6 +190,41 @@ public class ToolExecutor {
         return count + " line blocks set";
     }
 
+    private String execCurve(EditSession es, World world, Actor actor, JsonObject a) throws Exception {
+        List<BlockVector3> controlPoints = parsePoints(a, "points");
+        Pattern pattern = parsePattern(world, actor, str(a, "pattern"));
+        int thickness = a.has("thickness") ? a.get("thickness").getAsInt() : 0;
+        boolean hollow = a.has("hollow") && a.get("hollow").getAsBoolean();
+
+        if (controlPoints.size() < 3) {
+            throw new IllegalArgumentException("we_curve requires at least 3 points");
+        }
+
+        int segmentsPerSpan = 12;
+        List<BlockVector3> sampled = new ArrayList<>();
+        for (int i = 0; i < controlPoints.size() - 1; i++) {
+            BlockVector3 p0 = controlPoints.get(Math.max(0, i - 1));
+            BlockVector3 p1 = controlPoints.get(i);
+            BlockVector3 p2 = controlPoints.get(i + 1);
+            BlockVector3 p3 = controlPoints.get(Math.min(controlPoints.size() - 1, i + 2));
+
+            for (int s = 0; s < segmentsPerSpan; s++) {
+                double t = (double) s / segmentsPerSpan;
+                sampled.add(catmullRom(p0, p1, p2, p3, t));
+            }
+        }
+        sampled.add(controlPoints.get(controlPoints.size() - 1));
+
+        int count = 0;
+        for (int i = 0; i < sampled.size() - 1; i++) {
+            BlockVector3 p1 = sampled.get(i);
+            BlockVector3 p2 = sampled.get(i + 1);
+            count += es.drawLine(pattern, p1, p2, thickness, !hollow);
+        }
+
+        return count + " curve blocks set";
+    }
+
     private String execMove(EditSession es, World world, Actor actor, JsonObject a) throws Exception {
         CuboidRegion region = cuboid(a);
         int distance = a.get("distance").getAsInt();
@@ -261,6 +303,41 @@ public class ToolExecutor {
         boolean hollow = a.has("hollow") && a.get("hollow").getAsBoolean();
         int count = es.makePyramid(center, pattern, size, !hollow);
         return count + " pyramid blocks set";
+    }
+
+    private String execCone(EditSession es, World world, Actor actor, JsonObject a) throws Exception {
+        BlockVector3 center = bv3(a, "center");
+        Pattern pattern = parsePattern(world, actor, str(a, "pattern"));
+        double baseRadiusNS = a.get("radiusNS").getAsDouble();
+        double baseRadiusEW = a.has("radiusEW") ? a.get("radiusEW").getAsDouble() : baseRadiusNS;
+        int height = a.has("height") ? a.get("height").getAsInt() : (int) Math.max(1, Math.ceil(baseRadiusNS));
+        boolean hollow = a.has("hollow") && a.get("hollow").getAsBoolean();
+        int thickness = a.has("thickness") ? a.get("thickness").getAsInt() : 1;
+        if (thickness < 1) thickness = 1;
+
+        int count = 0;
+        for (int y = 0; y < height; y++) {
+            double taper = 1.0 - ((double) y / Math.max(1, height));
+            double radiusNS = baseRadiusNS * taper;
+            double radiusEW = baseRadiusEW * taper;
+            if (radiusNS <= 0 || radiusEW <= 0) continue;
+
+            BlockVector3 layerCenter = center.add(0, y, 0);
+            if (!hollow) {
+                count += es.makeCylinder(layerCenter, pattern, radiusNS, radiusEW, 1, true);
+                continue;
+            }
+
+            int shellLayers = Math.max(1, thickness);
+            for (int t = 0; t < shellLayers; t++) {
+                double shellRadiusNS = radiusNS - t;
+                double shellRadiusEW = radiusEW - t;
+                if (shellRadiusNS <= 0 || shellRadiusEW <= 0) break;
+                count += es.makeCylinder(layerCenter, pattern, shellRadiusNS, shellRadiusEW, 1, false);
+            }
+        }
+
+        return count + " cone blocks set";
     }
 
     private String execGenerate(EditSession es, World world, Actor actor, JsonObject a) throws Exception {
@@ -457,6 +534,39 @@ public class ToolExecutor {
                 v.get("x").getAsInt(),
                 v.get("y").getAsInt(),
                 v.get("z").getAsInt());
+    }
+
+    private List<BlockVector3> parsePoints(JsonObject a, String key) {
+        JsonArray arr = a.getAsJsonArray(key);
+        List<BlockVector3> points = new ArrayList<>();
+        for (JsonElement e : arr) {
+            JsonObject p = e.getAsJsonObject();
+            points.add(BlockVector3.at(
+                    p.get("x").getAsInt(),
+                    p.get("y").getAsInt(),
+                    p.get("z").getAsInt()));
+        }
+        return points;
+    }
+
+    private BlockVector3 catmullRom(BlockVector3 p0, BlockVector3 p1, BlockVector3 p2, BlockVector3 p3, double t) {
+        double t2 = t * t;
+        double t3 = t2 * t;
+
+        double x = 0.5 * ((2.0 * p1.x())
+                + (-p0.x() + p2.x()) * t
+                + (2.0 * p0.x() - 5.0 * p1.x() + 4.0 * p2.x() - p3.x()) * t2
+                + (-p0.x() + 3.0 * p1.x() - 3.0 * p2.x() + p3.x()) * t3);
+        double y = 0.5 * ((2.0 * p1.y())
+                + (-p0.y() + p2.y()) * t
+                + (2.0 * p0.y() - 5.0 * p1.y() + 4.0 * p2.y() - p3.y()) * t2
+                + (-p0.y() + 3.0 * p1.y() - 3.0 * p2.y() + p3.y()) * t3);
+        double z = 0.5 * ((2.0 * p1.z())
+                + (-p0.z() + p2.z()) * t
+                + (2.0 * p0.z() - 5.0 * p1.z() + 4.0 * p2.z() - p3.z()) * t2
+                + (-p0.z() + 3.0 * p1.z() - 3.0 * p2.z() + p3.z()) * t3);
+
+        return BlockVector3.at(Math.round(x), Math.round(y), Math.round(z));
     }
 
     private BlockPos pos(JsonObject a, String key) {
