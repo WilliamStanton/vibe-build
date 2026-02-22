@@ -351,7 +351,12 @@ const runPromptPipeline = async (
 			const executorUserText = [
 				`Player request: ${prompt}`,
 				`Build origin: ${plan.origin.x}, ${plan.origin.y}, ${plan.origin.z}`,
-				`Full plan: ${plan.steps.map((s) => `${s.id}: ${s.feature}`).join(" | ")}`,
+				`Recent completed steps (latest up to 2): ${
+					plan.steps
+						.slice(Math.max(0, i - 2), i)
+						.map((s, idx) => `${Math.max(0, i - 2) + idx + 1}. ${s.id}: ${s.feature}`)
+						.join(" | ") || "none"
+				}`,
 				``,
 				`Current step (${stepIndex}/${totalSteps}):`,
 				`Feature: ${step.feature}`,

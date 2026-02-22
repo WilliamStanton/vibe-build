@@ -288,46 +288,6 @@ export const hollow = toolDefinition({
 	outputSchema: weResult,
 });
 
-export const forest = toolDefinition({
-	name: "we_forest",
-	description:
-		"Plant a forest of trees within the selection region. Trees are placed on valid surfaces within the area. The default density (5) is already fairly dense.",
-	inputSchema: z.object({
-		pos1: vec3.describe("First corner of the region to plant trees in"),
-		pos2: vec3.describe("Opposite corner of the region to plant trees in"),
-		treeType: z
-			.string()
-			.optional()
-			.describe(
-				"Tree type: oak, birch, spruce, jungle, acacia, dark_oak, etc.",
-			),
-		density: z
-			.number()
-			.min(0)
-			.max(100)
-			.optional()
-			.describe("Density of tree placement (0-100, default: 5)"),
-	}),
-	outputSchema: weResult,
-});
-
-export const flora = toolDefinition({
-	name: "we_flora",
-	description:
-		"Scatter flora (tall grass, flowers) on grass blocks, and cacti/dead grass on sand within the selection. Works like overlay — places on top of existing terrain.",
-	inputSchema: z.object({
-		pos1: vec3.describe("First corner of the region"),
-		pos2: vec3.describe("Opposite corner of the region"),
-		density: z
-			.number()
-			.min(0)
-			.max(100)
-			.optional()
-			.describe("Density of flora placement (0-100)"),
-	}),
-	outputSchema: weResult,
-});
-
 export const deform = toolDefinition({
 	name: "we_deform",
 	description:
@@ -341,29 +301,6 @@ export const deform = toolDefinition({
 				'Deformation expression. Modifies x/y/z to indicate source block. E.g. "y-=1" (shift up), "x+=0.5*sin(y*pi/10)" (wave)',
 			),
 		coordinateMode,
-	}),
-	outputSchema: weResult,
-});
-
-export const revolve = toolDefinition({
-	name: "we_revolve",
-	description:
-		"Revolve (radially repeat) the selection around a vertical axis. Creates rotational symmetry — e.g. build one quarter of a circular tower, then revolve with pasteCount=4 to complete the circle.",
-	inputSchema: z.object({
-		pos1: vec3.describe("First corner of the region to revolve"),
-		pos2: vec3.describe("Opposite corner of the region to revolve"),
-		pasteCount: z
-			.number()
-			.int()
-			.min(2)
-			.describe(
-				"Number of copies around the circle (e.g. 4 for quarter-symmetry, 8 for octagonal)",
-			),
-		reverse: z
-			.boolean()
-			.optional()
-			.describe("If true, revolve counter-clockwise"),
-		mask: mask.optional().describe("Only revolve blocks matching this mask"),
 	}),
 	outputSchema: weResult,
 });
@@ -506,68 +443,6 @@ export const generate = toolDefinition({
 	outputSchema: weResult,
 });
 
-export const forestGen = toolDefinition({
-	name: "we_forestgen",
-	description:
-		"Generate a forest in a square area centered on a position. Trees are planted on valid ground within the area. Different from we_forest which uses a selection — this radiates outward from a point.",
-	inputSchema: z.object({
-		center: vec3.describe("Center point of the forest area"),
-		size: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Radius of the square area in blocks"),
-		treeType: z
-			.string()
-			.optional()
-			.describe(
-				"Tree type: oak, birch, spruce, jungle, acacia, dark_oak, etc.",
-			),
-		density: z
-			.number()
-			.min(0)
-			.max(100)
-			.optional()
-			.describe(
-				"Density of tree placement (0-100, default: 5). Even 5 is fairly dense.",
-			),
-	}),
-	outputSchema: weResult,
-});
-
-// ── History Commands ──
-
-export const undo = toolDefinition({
-	name: "we_undo",
-	description:
-		"Undo the last WorldEdit action(s). Can undo multiple actions at once by specifying a count.",
-	inputSchema: z.object({
-		times: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Number of actions to undo (default: 1)"),
-	}),
-	outputSchema: weResult,
-});
-
-export const redo = toolDefinition({
-	name: "we_redo",
-	description:
-		"Redo the last undone WorldEdit action(s). Can redo multiple actions at once.",
-	inputSchema: z.object({
-		times: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Number of actions to redo (default: 1)"),
-	}),
-	outputSchema: weResult,
-});
-
 // ── Utility Commands ──
 
 export const fill = toolDefinition({
@@ -594,45 +469,6 @@ export const fill = toolDefinition({
 	outputSchema: weResult,
 });
 
-export const fillRecursive = toolDefinition({
-	name: "we_fill_recursive",
-	description:
-		"Recursively fill a hole by following connected air spaces downward. Unlike we_fill, this WILL follow caves and openings that expand sideways as they go deeper. Still will not fill upward past the starting Y level.",
-	inputSchema: z.object({
-		position: vec3.describe("Starting position"),
-		pattern: pattern.describe("Block pattern to fill with"),
-		radius: z.number().int().min(1).describe("Maximum radius to fill within"),
-		depth: z.number().int().min(1).optional().describe("Maximum depth to fill"),
-	}),
-	outputSchema: weResult,
-});
-
-export const snow = toolDefinition({
-	name: "we_snow",
-	description:
-		"Simulate snowfall over an area. Snow is placed on exposed surfaces that can logically hold snow. Snowfall is purely vertical — overhangs block snow below them.",
-	inputSchema: z.object({
-		position: vec3.describe("Center position for snowfall"),
-		radius: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Horizontal radius of the snow area"),
-		height: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Vertical extent of the snow cylinder"),
-		stackLayers: z
-			.boolean()
-			.optional()
-			.describe("If true, stack snow layers for varying depth"),
-	}),
-	outputSchema: weResult,
-});
-
 export const green = toolDefinition({
 	name: "we_green",
 	description:
@@ -655,50 +491,6 @@ export const green = toolDefinition({
 			.boolean()
 			.optional()
 			.describe("If true, also convert coarse dirt to grass"),
-	}),
-	outputSchema: weResult,
-});
-
-export const removeAbove = toolDefinition({
-	name: "we_remove_above",
-	description:
-		"Remove all blocks above a position in a square column. Useful for clearing towers, removing overhangs, or creating open sky.",
-	inputSchema: z.object({
-		position: vec3.describe("Base position (removes blocks above this point)"),
-		size: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Apothem (half-width) of the square column"),
-		height: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Maximum height to remove (default: to world top)"),
-	}),
-	outputSchema: weResult,
-});
-
-export const removeBelow = toolDefinition({
-	name: "we_remove_below",
-	description:
-		"Remove all blocks below a position in a square column. Useful for clearing ground, creating pits, or removing foundations.",
-	inputSchema: z.object({
-		position: vec3.describe("Base position (removes blocks below this point)"),
-		size: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Apothem (half-width) of the square column"),
-		depth: z
-			.number()
-			.int()
-			.min(1)
-			.optional()
-			.describe("Maximum depth to remove (default: to world bottom)"),
 	}),
 	outputSchema: weResult,
 });
