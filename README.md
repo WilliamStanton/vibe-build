@@ -4,8 +4,9 @@
 VibeBuild turns one prompt or image into a complete build in just minutes with no user input required.
 
 Player can place the result back into their world with ghost preview controls, or continue prompting to build more complex structures.
+- [Showcase Gallery](SHOWCASE.md)
 
-## Agent Crew
+## Agent Crew 🤖
 
 VibeBuild uses a multi-agent pipeline so each stage does one job well.
 
@@ -16,14 +17,14 @@ VibeBuild uses a multi-agent pipeline so each stage does one job well.
 | Executor agent | Calls WorldEdit tools step-by-step and adapts from tool results | Fast and reliable in-game construction |
 | Finalizer agent | Produces a clear summary of what was built | Better transparency and confidence |
 
-## Build modes
+## Build modes 🧭
 
 VibeBuild has two input modes:
 
 - Text mode (`/vb <prompt...>`): direct natural-language prompt from in-game chat.
 - Image mode (`/vb image`): opens a webpage or scans QR code, where you upload a reference image + optional notes, then the image agent sends it to be built.
 
-## How it works
+## How it works ⚙️
 
 1. Player chooses their mode.
 2. Planner Agent creates a structured plan.
@@ -36,7 +37,7 @@ Executor context is token-optimized:
 - each executor call includes current step + up to 2 previous completed steps (window)
 
 
-## In-game commands
+## In-game commands 🎮
 
 | Command | Purpose |
 | --- | --- |
@@ -54,7 +55,7 @@ Ghost preview controls after `/vb confirm`:
 - `[`: rotate counter-clockwise
 - `Page Up` / `Page Down`: move up/down
 
-## Requirements
+## Requirements ✅
 
 - Java 21
 - Bun 1.3+
@@ -63,7 +64,7 @@ Ghost preview controls after `/vb confirm`:
 - WorldEdit for Fabric (runtime dependency)
 - ANTHROPIC_API_KEY
 
-## Quick start
+## Quick start 🚀
 
 ### 1) Start backend
 
