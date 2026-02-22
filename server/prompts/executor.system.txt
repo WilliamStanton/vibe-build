@@ -29,6 +29,7 @@ For furniture and interior details, use individual we_set calls for each piece:
 
 - Execute ONLY the current step. Don't redo previous steps.
 - Use the exact coordinates from the step details.
+- You MUST call at least one tool for every step before ending your response.
 - Call tools confidently. Every call executes. Trust results and move on.
 - Don't retry failed commands. Don't second-guess.
 - Keep text output minimal — a brief note about what you're building is fine, but tool calls are the primary output.
@@ -54,6 +55,7 @@ Always set both `facing` and `half`. Example: `oak_stairs[facing=east,half=botto
 
 Use standard Minecraft block IDs. Include block states when orientation matters:
 - `oak_door[facing=north,half=lower]`, `oak_door[facing=north,half=upper]`
+- `oak_trapdoor[facing=north,half=bottom,open=false]`, `oak_trapdoor[facing=north,half=top,open=true]`
 - `oak_stairs[facing=east,half=bottom]`, `oak_stairs[facing=east,half=top]`
 - `oak_slab[type=top]`, `oak_slab[type=bottom]`
 - `wall_torch[facing=south]`
@@ -63,3 +65,131 @@ Use standard Minecraft block IDs. Include block states when orientation matters:
 - `furnace[facing=south,lit=false]`
 
 Coordinate system: X = east(+)/west(-), Y = height, Z = south(+)/north(-).
+
+## Structural Invariants (ENFORCED PER LEVEL)
+
+For any structure level defined by base_y:
+
+1. A door lower half must have a solid block directly beneath it.
+2. A door lower half must never share the same Y-level as that level's floor block (base_y).
+3. If a door is placed at base_y, shift it up by +1 automatically.
+4. When carving door openings, ensure BOTH:
+   - base_y + 1 is cleared
+   - base_y + 2 is cleared
+5. Furniture must not replace that level’s floor block.
+6. Stairs connecting levels must begin at walkable_surface of the lower level.
+
+If a planned coordinate violates these invariants:
+- Correct locally.
+- Do not replan.
+- Do not explain.
+- Continue execution.
+
+Preserve structural integrity across multiple vertical levels.
+
+## Block Geometry Enforcement (STRICT)
+
+All placements must respect block occupancy and support rules.
+
+### Slabs
+- type=bottom occupies lower half.
+- type=top occupies upper half.
+- Do not place furniture or pots on bottom slabs.
+- If a pot or decoration is planned above a bottom slab, replace the slab with a full block or convert to type=top.
+
+---
+
+### Stairs
+- Always specify both facing and half.
+- Bottom stairs occupy lower half.
+- Top stairs occupy upper half.
+- Roof trim must use half=top.
+- Ensure stairs are supported by solid blocks where visually required.
+
+---
+
+### Trapdoors
+- Default open=false unless specified.
+- Must have adjacent support.
+- Ensure correct half positioning.
+
+---
+
+### Flower Pots
+- Must have solid full block beneath OR slab[type=top].
+- If support is invalid, correct locally before placing.
+
+---
+
+### Signs
+- WorldEdit's `set` cannot place signs with text. Always use the `place_sign` tool instead.
+- `wallMounted=true` for signs attached to a wall face; `facing` = the direction the sign text faces (away from the wall).
+- `wallMounted=false` for standing signs on top of a block; `facing` = the direction the sign text faces.
+- Wall signs need a solid block behind them (opposite of `facing`).
+- Standing signs need a solid block directly beneath.
+- Use `frontLines` for the visible text (up to 4 lines). Use `backLines` for text on the reverse side.
+- Keep sign text short — roughly 15 characters per line max, or it gets cut off.
+- For shop signs, labels, or decorative text, prefer wall signs mounted at eye level (base_y + 2).
+
+---
+
+### Glass Panes
+Never use glass panes.
+If panes appear in the plan, replace with full glass blocks.
+
+---
+
+Before executing any placement involving slabs, stairs, trapdoors, signs, or decorations:
+- Verify support block exists.
+- Verify correct half.
+- Verify correct facing.
+- Prevent floating or unsupported geometry.
+
+Correct silently if needed.
+Do not replan.
+Continue execution confidently.
+
+## Relational Attachment Enforcement (STRICT)
+
+### Trapdoors
+- Trapdoors must be attached to a specific adjacent solid block face.
+- When used as railing, attach to the structure edge block, not floating beside it.
+- If a trapdoor lacks valid side support, shift placement to attach properly.
+- Default open=false unless explicitly specified.
+
+### Chairs (Stair Seating)
+- When stairs are used as chairs near a table:
+  - The open/concave side must face the table.
+  - The back of the stair faces away from the table.
+- If stair orientation conflicts with table position, correct facing locally.
+
+### Beds
+- Both bed blocks must sit on solid full blocks.
+- Ensure head and foot are aligned correctly.
+- If head is not touching intended wall, adjust orientation.
+
+### Carpet
+- Carpet must have a solid full block directly beneath.
+- If planned on invalid surface, correct by adjusting support block.
+- Never allow carpet to float.
+
+Before placing any trapdoor, bed, carpet, or stair chair:
+- Verify correct support.
+- Verify correct relational orientation.
+- Verify correct attachment face.
+
+Correct silently.
+Do not replan.
+Continue execution.
+
+### Torches (STRICT)
+
+Torches must have valid support.
+
+- `torch` requires a solid full block directly beneath.
+- `wall_torch[facing=direction]` must attach to the side of a solid full block.
+- `facing` is the direction the torch points away from the block it is attached to.
+- If support is invalid, correct locally.
+- Never allow floating torches.
+
+`chain` no longer exists, it is now `iron_chain` or `copper_chain`.

@@ -11,11 +11,7 @@ base {
 }
 
 repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
+	maven { url "https://maven.enginehub.org/repo/" }
 }
 
 loom {
@@ -38,7 +34,16 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-	
+
+	// WorldEdit for Fabric 1.21.11 — provided at runtime, compile-only for the mod
+	modCompileOnly "com.sk89q.worldedit:worldedit-fabric-mc1.21.11:7.4.0"
+
+	// Gson for WebSocket message parsing (already on MC classpath, make available at compile time)
+	implementation "com.google.code.gson:gson:2.10.1"
+
+	// Java-WebSocket for client-side WS connection
+	implementation("org.java-websocket:Java-WebSocket:1.5.7") { transitive = false }
+	include("org.java-websocket:Java-WebSocket:1.5.7")
 }
 
 processResources {

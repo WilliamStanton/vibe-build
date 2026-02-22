@@ -39,3 +39,168 @@ Each step should be one feature of the build. The `details` field is critical �
 
 - Do NOT plan foundations for houses or small buildings. Start walls directly at ground level. Foundations make houses look like they're floating on pedestals. Only plan foundations for large-scale structures like castles or bridges where they make architectural sense.
 - When planning stairs (staircases, porches, roof trim), always specify the required `facing` direction in `details` so the executor gets it right.
+
+## Shared Structural Level Model (MANDATORY)
+
+All enclosed structures must define explicit structural levels.
+
+For each level (ground floor, second floor, tower level, basement, etc.), define:
+
+- level_name
+- base_y
+- wall_height
+
+Within each level:
+
+- floor_block = base_y
+- walkable_surface = base_y + 1
+- wall_base = base_y
+- door_lower_half = base_y + 1
+- door_upper_half = base_y + 2
+- ceiling_base = base_y + wall_height
+
+Rules for every level:
+
+1. Floors occupy base_y.
+2. Players stand at walkable_surface.
+3. Walls begin at base_y and extend upward wall_height blocks.
+4. Doors NEVER start at base_y.
+5. Door openings must be carved at:
+   - base_y + 1
+   - base_y + 2
+6. Furniture must sit on walkable_surface.
+7. Stairs connecting between levels must start at walkable_surface of the lower level.
+8. Ensure at least 2-block interior clearance above walkable_surface.
+
+Before finalizing coordinates for a level:
+- Verify doors do not overlap floor blocks.
+- Verify walls sit directly on that level's floor.
+- Verify ceiling and next level base_y do not conflict.
+
+Each level is spatially independent but vertically aligned.
+
+## Block Geometry & Orientation Model (MANDATORY)
+
+Minecraft blocks do not all occupy a full 1x1x1 cube. Plan with correct block geometry and support logic.
+
+### Full Blocks
+Examples: stone, planks, logs, glass.
+- Occupy full 1x1x1 space.
+- Can support furniture, pots, torches, slabs, and stairs.
+
+---
+
+### Slabs
+Slabs occupy half of a block vertically.
+
+- type=bottom → occupies LOWER half of block space.
+- type=top → occupies UPPER half of block space.
+
+Rules:
+- Floors should default to full blocks unless half-height is intentional.
+- Flower pots, furniture, and decorations may sit on:
+  - Full blocks
+  - Top slabs
+- Never place pots or decorations on bottom slabs.
+- When stacking slabs intentionally, explicitly state slab types.
+
+---
+
+### Stairs
+Stairs are not full cubes.
+
+They require:
+- facing (direction the back of stair faces)
+- half (bottom = normal stair, top = upside-down)
+
+Rules:
+- Bottom stairs occupy lower half.
+- Top stairs occupy upper half.
+- Roof trim and ceiling arches require half=top.
+- Stair facing must match structural direction (porch steps face toward the building).
+- Never place furniture directly on stairs.
+
+---
+
+### Trapdoors
+Trapdoors require:
+
+- facing
+- half (top or bottom)
+- open (true/false)
+
+Rules:
+- Default to open=false unless intentional.
+- Trapdoors require adjacent support.
+- Closed trapdoors at half=top act as thin surface panels.
+
+---
+
+### Flower Pots
+Flower pots require:
+
+- A full solid block beneath
+- OR a slab with type=top
+
+Never place flower pots on:
+- Bottom slabs
+- Stairs
+- Air
+
+---
+
+### Glass Panes
+Do NOT use glass panes.
+Always use full glass blocks.
+
+Panes do not update correctly after WorldEdit placement.
+
+---
+
+Before finalizing any step involving slabs, stairs, trapdoors, or decorations:
+- Verify correct half placement.
+- Verify facing direction.
+- Verify proper structural support.
+- Avoid unsupported or floating elements.
+
+## Relational Placement Rules (MANDATORY)
+
+Certain blocks require relational orientation relative to nearby structures.
+
+### Trapdoors (Railings & Panels)
+- Trapdoors must be attached to a specific adjacent block face.
+- When used as railings, attach them to the outer edge block of the structure.
+- Facing should orient outward from the structure.
+- Do not float trapdoors in open space.
+
+### Chairs (Stairs Used as Seats)
+- When using stairs as chairs at a table, the open/concave side of the stair must face the table.
+- The back of the stair faces away from the table.
+- Always specify correct facing relative to table center.
+
+### Beds
+- Beds are two blocks long.
+- Both head and foot must sit on solid full blocks.
+- Head of bed should touch a wall unless intentionally freestanding.
+- Facing direction is the direction a player lies down toward.
+
+### Carpet
+- Carpet must always be placed on top of a full solid block.
+- Never place carpet on slabs (unless slab[type=top]).
+- Never place carpet floating or on stairs.
+- Carpet cannot support other blocks.
+
+Before finalizing any furniture or decorative step:
+- Verify proper support.
+- Verify correct relational facing.
+- Verify correct attachment face for trapdoors.
+
+### Torches
+
+Torches require valid attachment.
+
+- `torch` must sit on a full solid block.
+- `wall_torch[facing=direction]` must attach to the side of a full solid block.
+- `facing` indicates the direction the torch points AWAY from the supporting block.
+- Never place torches on air, carpet, stairs, bottom slabs, or trapdoors.
+- Never allow floating torches.

@@ -1,0 +1,13 @@
+{
+  "type": "vibe-build:build_world",
+  "generator": {
+    "type": "minecraft:flat",
+    "settings": {
+      "biome": "minecraft:the_void",
+      "layers": [],
+      "features": false,
+      "lakes": false,
+      "structure_overrides": []
+    }
+  }
+}

@@ -5,6 +5,7 @@ import { z } from "zod";
 import executorPrompt from "../prompts/executor.system.txt";
 import finalizerPrompt from "../prompts/finalizer.system.txt";
 import plannerPrompt from "../prompts/planner.system.txt";
+import spatialprefixPrompt from "../prompts/spatialprefix.system.txt";
 import { allWorldEditTools as allTools } from "./tools";
 
 const port = 8080;
@@ -62,9 +63,13 @@ interface Session {
 	pendingToolCalls: Map<string, (result: string) => void>;
 	/** Planner chat history — persists across prompts so the AI knows what it already built. */
 	plannerHistory: Message[];
+	/** Set to true when the client sends a cancel message. Checked between tool calls / steps. */
+	cancelled: boolean;
 }
 
 const sessions = new Map<string, Session>();
+
+const getSuccessStatus = (success: boolean, message: string): string => JSON.stringify({ success, message });
 
 // ── Server ──
 
@@ -74,6 +79,7 @@ wss.on("connection", (ws) => {
 		id: sessionId,
 		pendingToolCalls: new Map(),
 		plannerHistory: [],
+		cancelled: false,
 	};
 	sessions.set(sessionId, session);
 	console.log(`[${sessionId}] Client connected (${sessions.size} active)`);
@@ -85,9 +91,21 @@ wss.on("connection", (ws) => {
 		if (msg.type === "tool_result" && msg.toolCallId) {
 			const resolve = session.pendingToolCalls.get(msg.toolCallId);
 			if (resolve) {
-				resolve(msg.result ?? '{"success":false,"message":"missing result"}');
+				resolve(msg.result ?? getSuccessStatus(false, "Missing result"));
 				session.pendingToolCalls.delete(msg.toolCallId);
 			}
+			return;
+		}
+
+		// Cancel request from the mod.
+		if (msg.type === "cancel") {
+			console.log(`[${sessionId}] Client requested cancel`);
+			session.cancelled = true;
+			// Resolve any pending tool calls so the executor loop unblocks
+			for (const [_id, resolve] of session.pendingToolCalls) {
+				resolve(getSuccessStatus(false, "Build cancelled by player"));
+			}
+			session.pendingToolCalls.clear();
 			return;
 		}
 
@@ -102,9 +120,24 @@ wss.on("connection", (ws) => {
 		);
 		console.log(`${"=".repeat(60)}`);
 
+		// Reset cancel flag at the start of each prompt
+		session.cancelled = false;
+
 		try {
 			let totalToolCount = 0;
 			const t0 = performance.now();
+
+			/** Buffer text deltas and send a text_content_complete when done. */
+			let textBuffer = "";
+			const bufferDelta = (delta: string) => {
+				textBuffer += delta;
+			};
+			const flushText = () => {
+				if (textBuffer) {
+					ws.send(JSON.stringify({ type: "text_content_complete", content: textBuffer }));
+					textBuffer = "";
+				}
+			};
 
 			// ── STAGE 1: PLANNER ──
 			console.log(`\n[PLANNER] Starting planner...`);
@@ -130,8 +163,8 @@ wss.on("connection", (ws) => {
 			const tPlanner = performance.now();
 			const plannerStream = chat({
 				adapter,
-				maxTokens: 16384,
-				systemPrompts: [plannerPrompt],
+				maxTokens: 32768,
+				systemPrompts: [spatialprefixPrompt, plannerPrompt],
 				messages: session.plannerHistory.map((m) => ({
 					role: m.role as "user" | "assistant",
 					content: [{ type: "text" as const, content: m.content }],
@@ -142,12 +175,14 @@ wss.on("connection", (ws) => {
 			console.log(`[PLANNER] Streaming response...`);
 			let currentToolName = "";
 			let plannerChunks = 0;
+			textBuffer = "";
 			for await (const chunk of plannerStream) {
 				plannerChunks++;
 				if (chunk.type === "TEXT_MESSAGE_CONTENT") {
 					process.stdout.write(chunk.delta);
-					ws.send(JSON.stringify({ type: "delta", content: chunk.delta }));
+					bufferDelta(chunk.delta);
 				} else if (chunk.type === "TOOL_CALL_START") {
+					flushText();
 					currentToolName = (chunk as { toolName?: string }).toolName ?? "";
 					if (currentToolName === "submit_plan") {
 						console.log(
@@ -161,6 +196,7 @@ wss.on("connection", (ws) => {
 					}
 				}
 			}
+			flushText();
 			console.log();
 
 			const plannerMs = performance.now() - tPlanner;
@@ -200,8 +236,9 @@ wss.on("connection", (ws) => {
 
 			ws.send(
 				JSON.stringify({
-					type: "delta",
-					content: `Planning complete: ${plan.steps.length} features to build.\n`,
+					type: "plan_ready",
+					origin: plan.origin,
+					stepCount: plan.steps.length,
 				}),
 			);
 
@@ -213,6 +250,12 @@ wss.on("connection", (ws) => {
 			console.log(`${"─".repeat(60)}`);
 
 			for (const [i, step] of plan.steps.entries()) {
+				// Check for cancellation between steps
+				if (session.cancelled) {
+					console.log(`[${sessionId}] Build cancelled by player at step ${i + 1}`);
+					throw new Error("Build cancelled by player");
+				}
+
 				const stepIndex = i + 1;
 				const totalSteps = plan.steps.length;
 				let stepToolCount = 0;
@@ -281,8 +324,8 @@ wss.on("connection", (ws) => {
 				console.log(`  [EXECUTOR] Sending step to model...`);
 				const stream = chat({
 					adapter,
-					maxTokens: 16384,
-					systemPrompts: [executorPrompt],
+					maxTokens: 32768,
+					systemPrompts: [spatialprefixPrompt, executorPrompt],
 					messages: [
 						{
 							role: "user",
@@ -293,19 +336,16 @@ wss.on("connection", (ws) => {
 				});
 
 				let aiText = "";
+				textBuffer = "";
 				console.log(`  [EXECUTOR] Streaming response...`);
 				for await (const chunk of stream) {
 					if (chunk.type === "TEXT_MESSAGE_CONTENT") {
 						aiText += chunk.delta;
 						process.stdout.write(chunk.delta);
-						ws.send(
-							JSON.stringify({
-								type: "delta",
-								content: chunk.delta,
-							}),
-						);
+						bufferDelta(chunk.delta);
 					}
 				}
+				flushText();
 				if (aiText) console.log();
 
 				const stepMs = performance.now() - tStep;
@@ -347,7 +387,7 @@ wss.on("connection", (ws) => {
 				`[FINALIZER] "${finalText.trim()}" (${((performance.now() - tFinalizer) / 1000).toFixed(1)}s)`,
 			);
 			if (finalText) {
-				ws.send(JSON.stringify({ type: "delta", content: finalText }));
+				ws.send(JSON.stringify({ type: "text_content_complete", content: finalText }));
 			}
 
 			const elapsed = ((performance.now() - t0) / 1000).toFixed(1);

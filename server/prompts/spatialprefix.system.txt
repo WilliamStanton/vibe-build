@@ -1,0 +1,115 @@
+Example A: Interior size from an outer box (the classic fencepost error)
+
+Prefix Q1
+WorldEdit cuboids are inclusive on both ends. If pos1=(0,64,0) and pos2=(10,70,6), what is the size (dx,dy,dz) in blocks?
+
+Prefix A1
+dx = 10-0+1 = 11
+dy = 70-64+1 = 7
+dz = 6-0+1 = 7
+
+Prefix Q2
+If walls are 1 block thick on all sides, what is the interior footprint size?
+
+Prefix A2
+Interior dx = 11-2 = 9
+Interior dz = 7-2 = 5
+
+Main Task
+Make a hollow shell with 1-thick walls for that selection.
+
+Answer pattern
+Use //walls (walls only) + separate floor/ceiling if needed, OR //outline then fill interior air. The important part is the interior math is now explicit: 9×5 interior.
+
+Why this helps doors: you can now center openings in a 9-wide interior (odd width has a single center).
+
+Example B: Centered 2-wide door in an even-width wall
+
+Prefix Q1
+A wall segment runs along X from x=0..11 inclusive at z=0. What is its width, and what are the two centered x positions for a 2-wide door?
+
+Prefix A1
+Width = 12 blocks. Center is between x=5 and x=6 (0-based inclusive span). A centered 2-wide door uses x=5 and x=6.
+
+Prefix Q2
+If the door is 2 blocks tall starting at floor y=64, what Y coordinates must be cleared?
+
+Prefix A2
+Clear y=64 and y=65.
+
+Main Task
+Carve a centered 2×2 doorway in that wall at z=0.
+
+Answer (coordinates, command-agnostic)
+Clear blocks at:
+(x=5..6, y=64..65, z=0)
+
+If you want it as WE: select that 2×2 region and //set air.
+
+This catches the common mistake of choosing (6,7) or (4,5) depending on rounding.
+
+Example C: Single door centered on odd-width interior, aligned to floor
+
+Prefix Q1
+Interior width is 9 blocks along X. What is the exact center x if the interior spans x=2..10 inclusive?
+
+Prefix A1
+Width 9 => single center. Center index is the 5th block. x = (2+10)/2 = 6.
+
+Prefix Q2
+A standard door occupies two blocks: lower at y=floor, upper at y=floor+1. If floor is y=64, which blocks are door blocks?
+
+Prefix A2
+(6,64,) lower and (6,65,) upper.
+
+Main Task
+Place a centered 1-wide door on the front wall, flush with the interior floor.
+
+Answer (coordinate intent)
+Door lower at y=64, upper at y=65, at the computed center x=6, on the wall’s z.
+
+This forces “door sits on floor” rather than accidentally at y=65/66 from using “eye height” logic.
+
+Example D: Aligning interior after using different commands (set/walls/move/stack)
+
+This is about ensuring commands don’t shift your reference frame.
+
+Prefix Q1
+If you //move 1 while facing north, which axis changes, and by what sign?
+
+Prefix A1
+Facing north means forward is -Z, so //move 1 shifts selection by (0,0,-1).
+
+Prefix Q2
+If a doorway was at z=0 and you move the whole structure forward 1 (north), where is the doorway now?
+
+Prefix A2
+It’s at z=-1.
+
+Main Task
+Build a room, then move it forward by 1 block, and ensure the door remains centered relative to the room.
+
+Answer pattern
+Compute door coords in room-local terms first (offsets from pos1/min corner), then apply the same translation vector to door placement/opening. Don’t recompute from player position after the move.
+
+This prevents the “door drift” you see when mixing “selection-relative” and “player-relative” steps.
+
+Example E: Two rooms connected by a corridor (alignment across selections)
+
+Prefix Q1
+Room A interior spans x=0..8. Room B interior spans x=12..20. What x coordinate must the corridor centerline use to align with both centers?
+
+Prefix A1
+Room A center x = 4. Room B center x = 16. They don’t match, so a straight corridor can’t be centered to both unless you offset one room or corridor jogs.
+
+Prefix Q2
+If instead both interiors span 9 blocks and you want the corridor centered, what must be true?
+
+Prefix A2
+Their center x values must be equal. So either place rooms so their centers match, or design a jog/turn.
+
+Main Task
+Connect two interiors with doors + corridor so doorways align.
+
+Answer pattern
+Either: (1) enforce same center coordinate during placement, or (2) explicitly insert a 90° jog with a second doorway. The prefix prevents the model from “assuming” alignment.
