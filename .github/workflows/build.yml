@@ -9,6 +9,9 @@ on: [pull_request, push]
 jobs:
   build:
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: mod
     steps:
       - name: checkout repository
         uses: actions/checkout@v4
@@ -27,4 +30,18 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Artifacts
-          path: build/libs/
+          path: mod/build/libs/
+      - name: read mod version
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: version
+        run: echo "version=$(grep '^mod_version=' gradle.properties | cut -d'=' -f2)" >> "$GITHUB_OUTPUT"
+      - name: create release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          files: mod/build/libs/*.jar
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
