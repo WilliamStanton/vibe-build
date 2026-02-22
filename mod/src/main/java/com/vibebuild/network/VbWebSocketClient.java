@@ -37,6 +37,7 @@ public class VbWebSocketClient extends WebSocketClient {
     @Override
     public void onOpen(ServerHandshake handshake) {
         Vibebuild.LOGGER.info("[VB] WebSocket connected for {}", session.playerName);
+        sendRegister();
         runOnServerThread(() -> {
             ServerPlayer player = playerSupplier.get();
             if (player != null) {
@@ -308,6 +309,7 @@ public class VbWebSocketClient extends WebSocketClient {
     public void sendPrompt(String content, double x, double y, double z) {
         JsonObject msg = new JsonObject();
         msg.addProperty("type", "prompt");
+        msg.addProperty("playerName", session.playerName);
         msg.addProperty("content", content);
         JsonObject pos = new JsonObject();
         pos.addProperty("x", x);
@@ -321,6 +323,14 @@ public class VbWebSocketClient extends WebSocketClient {
     public void sendCancel() {
         JsonObject msg = new JsonObject();
         msg.addProperty("type", "cancel");
+        send(GSON.toJson(msg));
+    }
+
+    /** Register this websocket with the server so HTTP tools can route by player name. */
+    private void sendRegister() {
+        JsonObject msg = new JsonObject();
+        msg.addProperty("type", "register");
+        msg.addProperty("playerName", session.playerName);
         send(GSON.toJson(msg));
     }
 }

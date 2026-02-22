@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VibeBuild Image Input</title>
+  <style>
+    :root {
+      --bg: #f4ede2;
+      --panel: #fff9f1;
+      --ink: #23201b;
+      --muted: #6e6558;
+      --accent: #0d8f7a;
+      --accent-strong: #096f5f;
+      --line: #d7c8b4;
+      --ok: #1f7a45;
+      --err: #9b2c2c;
+      --shadow: 0 14px 40px rgba(44, 35, 24, 0.14);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 8% 12%, rgba(13, 143, 122, 0.2), transparent 38%),
+        radial-gradient(circle at 92% 78%, rgba(155, 117, 34, 0.18), transparent 33%),
+        linear-gradient(150deg, #f8f0e5 0%, #f0e6d7 45%, #e9dece 100%);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .card {
+      width: min(920px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      animation: rise 360ms ease-out;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.99);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .head {
+      padding: 24px 26px 14px;
+      border-bottom: 1px dashed var(--line);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.4rem, 2.8vw, 2rem);
+      letter-spacing: 0.2px;
+    }
+
+    .sub {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    form {
+      padding: 20px 26px 26px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 0.86rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    input,
+    textarea,
+    button {
+      font: inherit;
+    }
+
+    input,
+    textarea {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fffdf8;
+      padding: 10px 11px;
+      color: var(--ink);
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    input:focus,
+    textarea:focus {
+      outline: 2px solid color-mix(in srgb, var(--accent), white 55%);
+      outline-offset: 1px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 11px 18px;
+      cursor: pointer;
+      font-weight: 700;
+      color: #f6fdfb;
+      background: linear-gradient(135deg, var(--accent), #0a6f8a);
+      transition: transform 160ms ease, background 160ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      background: linear-gradient(135deg, var(--accent-strong), #085b73);
+    }
+
+    button:disabled {
+      cursor: default;
+      opacity: 0.65;
+      transform: none;
+    }
+
+    .hint,
+    .status,
+    .output {
+      border-radius: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      background: #fffcf7;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.93rem;
+    }
+
+    .status {
+      display: none;
+      font-size: 0.94rem;
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    .status.ok {
+      color: var(--ok);
+      border-color: color-mix(in srgb, var(--ok), white 65%);
+      background: #f3fbf5;
+    }
+
+    .status.err {
+      color: var(--err);
+      border-color: color-mix(in srgb, var(--err), white 65%);
+      background: #fff4f4;
+    }
+
+    .output {
+      display: none;
+      white-space: pre-wrap;
+      line-height: 1.45;
+      max-height: 320px;
+      overflow: auto;
+      font-size: 0.93rem;
+    }
+
+    .output.show {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <header class="head">
+      <h1>Upload a Build Reference Image</h1>
+      <p class="sub">Add one image and optional notes. VibeBuild will turn it into a planner-ready build prompt, then send it into your active in-game session.</p>
+    </header>
+
+    <form id="image-form">
+      <div class="grid">
+        <div class="field">
+          <label for="playerName">Player</label>
+          <input id="playerName" name="playerName" required />
+        </div>
+        <div class="field">
+          <label for="x">Origin X</label>
+          <input id="x" name="x" type="number" required />
+        </div>
+        <div class="field">
+          <label for="y">Origin Y</label>
+          <input id="y" name="y" type="number" required />
+        </div>
+        <div class="field">
+          <label for="z">Origin Z</label>
+          <input id="z" name="z" type="number" required />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="image">Reference Image</label>
+        <input id="image" name="image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" required />
+      </div>
+
+      <div class="field">
+        <label for="notes">Optional Notes</label>
+        <textarea id="notes" name="notes" placeholder="Example: use dark oak and deepslate, add more interior detail, keep it medium size."></textarea>
+      </div>
+
+      <p class="hint">Tip: stand where you want the build origin before running <code>/vb image</code>. This page is prefilled from your in-game coordinates.</p>
+
+      <div class="actions">
+        <button id="submit" type="submit">Generate Prompt + Start Build</button>
+      </div>
+
+      <div id="status" class="status" aria-live="polite"></div>
+      <pre id="output" class="output"></pre>
+    </form>
+  </main>
+
+  <script>
+    const form = document.getElementById("image-form");
+    const submitBtn = document.getElementById("submit");
+    const statusBox = document.getElementById("status");
+    const outputBox = document.getElementById("output");
+
+    const query = new URLSearchParams(window.location.search);
+    const setIf = (id, key) => {
+      const val = query.get(key);
+      if (val !== null) document.getElementById(id).value = val;
+    };
+
+    setIf("playerName", "player");
+    setIf("x", "x");
+    setIf("y", "y");
+    setIf("z", "z");
+
+    const setStatus = (msg, kind) => {
+      statusBox.textContent = msg;
+      statusBox.className = `status show ${kind}`;
+    };
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      submitBtn.disabled = true;
+      outputBox.classList.remove("show");
+      outputBox.textContent = "";
+      setStatus("Analyzing image and generating build prompt...", "ok");
+
+      try {
+        const payload = new FormData(form);
+        const response = await fetch("/api/image-to-build", {
+          method: "POST",
+          body: payload,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Request failed");
+        }
+
+        setStatus(data.message || "Prompt generated and sent to game.", "ok");
+        if (data.generatedPrompt) {
+          outputBox.textContent = data.generatedPrompt;
+          outputBox.classList.add("show");
+        }
+      } catch (err) {
+        setStatus(err.message || "Something went wrong.", "err");
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
