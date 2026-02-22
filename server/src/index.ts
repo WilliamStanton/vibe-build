@@ -16,7 +16,7 @@ const wsPort = Number.parseInt(process.env.PORT ?? "8080", 10);
 const webPort = Number.parseInt(process.env.WEB_PORT ?? "8787", 10);
 const webHost = process.env.WEB_HOST?.trim() || "0.0.0.0";
 const adapter: AnyTextAdapter = anthropicText("claude-opus-4-6");
-const imageAdapter: AnyTextAdapter = openaiText("gpt-4o");
+const imageAdapter: AnyTextAdapter = anthropicText("claude-sonnet-4-5");
 const wss = new WebSocketServer({ port: wsPort });
 const imageInputHtml = Bun.file(new URL("../public/image-input.html", import.meta.url));
 
