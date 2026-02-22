@@ -12,7 +12,7 @@ import { allWorldEditTools as allTools } from "./tools";
 
 const wsPort = Number.parseInt(process.env.PORT ?? "8080", 10);
 const webPort = Number.parseInt(process.env.WEB_PORT ?? "8787", 10);
-const adapter: AnyTextAdapter = anthropicText("claude-sonnet-4-5");
+const adapter: AnyTextAdapter = anthropicText("claude-opus-4-6");
 const imageAdapter: AnyTextAdapter = openaiText("gpt-4o");
 const wss = new WebSocketServer({ port: wsPort });
 const imageInputHtml = Bun.file(new URL("../public/image-input.html", import.meta.url));
@@ -199,7 +199,7 @@ const runPromptPipeline = async (
 		const tPlanner = performance.now();
 		const plannerStream = chat({
 			adapter,
-			maxTokens: 32768,
+			maxTokens: 16384,
 			systemPrompts: [spatialprefixPrompt, plannerPrompt],
 			messages: session.plannerHistory.map((m) => ({
 				role: m.role as "user" | "assistant",
@@ -217,6 +217,7 @@ const runPromptPipeline = async (
 			if (chunk.type === "TEXT_MESSAGE_CONTENT") {
 				process.stdout.write(chunk.delta);
 				bufferDelta(chunk.delta);
+				ws.send(JSON.stringify({ type: "delta", content: chunk.delta }));
 			} else if (chunk.type === "TOOL_CALL_START") {
 				flushText();
 				currentToolName = (chunk as { toolName?: string }).toolName ?? "";
@@ -360,7 +361,7 @@ const runPromptPipeline = async (
 			console.log(`  [EXECUTOR] Sending step to model...`);
 			const stream = chat({
 				adapter,
-				maxTokens: 32768,
+				maxTokens: 16384,
 				systemPrompts: [spatialprefixPrompt, executorPrompt],
 				messages: [
 					{
