@@ -1,6 +1,8 @@
 import { type AnyTextAdapter, chat, toolDefinition } from "@tanstack/ai";
 import { anthropicText } from "@tanstack/ai-anthropic";
 import { openaiText } from "@tanstack/ai-openai";
+import { networkInterfaces } from "node:os";
+import * as QRCode from "qrcode";
 import { type WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
 import executorPrompt from "../prompts/executor.system.txt";
@@ -12,10 +14,23 @@ import { allWorldEditTools as allTools } from "./tools";
 
 const wsPort = Number.parseInt(process.env.PORT ?? "8080", 10);
 const webPort = Number.parseInt(process.env.WEB_PORT ?? "8787", 10);
+const webHost = process.env.WEB_HOST?.trim() || "0.0.0.0";
 const adapter: AnyTextAdapter = anthropicText("claude-opus-4-6");
 const imageAdapter: AnyTextAdapter = openaiText("gpt-4o");
 const wss = new WebSocketServer({ port: wsPort });
 const imageInputHtml = Bun.file(new URL("../public/image-input.html", import.meta.url));
+
+const getLanIPv4 = (): string | null => {
+	const interfaces = networkInterfaces();
+	for (const entries of Object.values(interfaces)) {
+		for (const entry of entries ?? []) {
+			if (entry.family === "IPv4" && !entry.internal) {
+				return entry.address;
+			}
+		}
+	}
+	return null;
+};
 
 // ── Planner tool schema ──
 
@@ -548,6 +563,7 @@ wss.on("connection", (ws) => {
 });
 
 Bun.serve({
+	hostname: webHost,
 	port: webPort,
 	fetch: async (request) => {
 		const url = new URL(request.url);
@@ -562,6 +578,13 @@ Bun.serve({
 
 		if (request.method === "GET" && url.pathname === "/health") {
 			return jsonResponse(200, { ok: true });
+		}
+
+		if (request.method === "GET" && url.pathname === "/api/network") {
+			return jsonResponse(200, {
+				lanIp: getLanIPv4(),
+				webPort,
+			});
 		}
 
 		if (request.method === "POST" && url.pathname === "/api/image-to-build") {
@@ -634,9 +657,61 @@ Bun.serve({
 			}
 		}
 
+		if (request.method === "GET" && url.pathname === "/api/qr") {
+			const text = url.searchParams.get("text")?.trim() ?? "";
+			if (!text) {
+				return jsonResponse(400, { error: "Missing text query parameter." });
+			}
+
+			if (text.length > 2048) {
+				return jsonResponse(400, { error: "QR text too long." });
+			}
+
+			let parsed: URL;
+			try {
+				parsed = new URL(text);
+			} catch {
+				return jsonResponse(400, { error: "QR text must be a valid URL." });
+			}
+
+			if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+				return jsonResponse(400, { error: "QR URL must use http or https." });
+			}
+
+			try {
+				const svg = await QRCode.toString(text, {
+					type: "svg",
+					width: 280,
+					margin: 1,
+					errorCorrectionLevel: "M",
+				});
+
+				return new Response(svg, {
+					status: 200,
+					headers: {
+						"content-type": "image/svg+xml; charset=utf-8",
+						"cache-control": "no-store",
+					},
+				});
+			} catch (err: unknown) {
+				console.error("[QR API ERROR]", err);
+				return jsonResponse(500, { error: "Failed to generate QR code." });
+			}
+		}
+
 		return new Response("Not found", { status: 404 });
 	},
 });
 
+const localWebUrl = `http://localhost:${webPort}/image-input`;
+const lanIp = getLanIPv4();
+const lanWebUrl = lanIp ? `http://${lanIp}:${webPort}/image-input` : null;
+
 console.log(`WebSocket server running on ws://localhost:${wsPort}`);
-console.log(`Image web app running on http://localhost:${webPort}/image-input`);
+console.log(`Image web app running on ${localWebUrl}`);
+if (webHost === "0.0.0.0" && lanWebUrl) {
+	console.log(`Image web app LAN URL: ${lanWebUrl}`);
+}
+if (webHost === "0.0.0.0") {
+	console.log(`Phone tip: open the LAN URL on the same Wi-Fi network.`);
+}

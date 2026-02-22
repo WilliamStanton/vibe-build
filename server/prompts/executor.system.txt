@@ -165,7 +165,11 @@ Continue execution confidently.
 
 ### Beds
 - Both bed blocks must sit on solid full blocks.
-- Ensure head and foot are aligned correctly.
+- Place beds explicitly as two blocks with `part=foot` and `part=head` (same `facing` on both).
+- Bed orientation rule: the head is exactly one block in the `facing` direction from the foot.
+- Use this delta check to validate/fix placement: `north=(0,-1)`, `south=(0,+1)`, `east=(+1,0)`, `west=(-1,0)` on `(x,z)`.
+- If planned coordinates violate that rule (for example, head and foot are swapped), correct by swapping which coordinate gets `part=head` vs `part=foot` so `head = foot + facing_delta`.
+- For beds against walls, the head (pillow) must be on the wall side and the foot must extend away from the wall.
 - If head is not touching intended wall, adjust orientation.
 
 ### Carpet

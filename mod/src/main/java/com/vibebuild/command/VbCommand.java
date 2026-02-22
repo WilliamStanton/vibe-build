@@ -16,7 +16,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.net.Inet4Address;
+import java.net.NetworkInterface;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Enumeration;
 
 /**
  * Registers the /vb command.
@@ -30,7 +35,7 @@ import java.net.URI;
 public class VbCommand {
 
     private static final String WS_URL = "ws://localhost:8080";
-    private static final String IMAGE_INPUT_URL = "http://localhost:8787/image-input";
+    private static final String IMAGE_INPUT_URL = resolveImageInputUrl();
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
@@ -251,10 +256,11 @@ public class VbCommand {
             z = player.getZ();
         }
 
+        String encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8);
         String url = String.format(
             "%s?player=%s&x=%d&y=%d&z=%d",
             IMAGE_INPUT_URL,
-            name,
+            encodedName,
             Math.round(x),
             Math.round(y),
             Math.round(z)
@@ -268,7 +274,61 @@ public class VbCommand {
             );
 
         player.sendSystemMessage(ChatUtil.vb("Upload an image to generate a build prompt:"));
+        player.sendSystemMessage(ChatUtil.vbGray("The page includes a QR code so you can open it on your phone."));
         player.sendSystemMessage(Component.empty().append(ChatUtil.vb("")).append(link));
         return 1;
+    }
+
+    private static String resolveImageInputUrl() {
+        String explicit = firstNonBlank(
+            System.getProperty("vibebuild.imageInputUrl"),
+            System.getenv("VIBEBUILD_IMAGE_INPUT_URL")
+        );
+        if (explicit != null) {
+            return stripTrailingSlash(explicit);
+        }
+
+        String host = getLanIPv4Address();
+        if (host == null) {
+            host = "localhost";
+        }
+
+        return String.format("http://%s:8787/image-input", host);
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return null;
+    }
+
+    private static String stripTrailingSlash(String value) {
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
+    }
+
+    private static String getLanIPv4Address() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface nif = interfaces.nextElement();
+                if (!nif.isUp() || nif.isLoopback() || nif.isVirtual()) {
+                    continue;
+                }
+
+                Enumeration<java.net.InetAddress> addresses = nif.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    java.net.InetAddress address = addresses.nextElement();
+                    if (address instanceof Inet4Address && !address.isLoopbackAddress()) {
+                        return address.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Fallback to localhost.
+        }
+        return null;
     }
 }
