@@ -37,6 +37,7 @@ public class VbWebSocketClient extends WebSocketClient {
     @Override
     public void onOpen(ServerHandshake handshake) {
         Vibebuild.LOGGER.info("[VB] WebSocket connected for {}", session.playerName);
+        sendRegister();
         runOnServerThread(() -> {
             ServerPlayer player = playerSupplier.get();
             if (player != null) {
@@ -159,12 +160,25 @@ public class VbWebSocketClient extends WebSocketClient {
         });
     }
 
-    /** Delta just accumulates text; nothing is displayed until text_content_complete. */
+    /** Stream planner text to chat in readable chunks while still buffering full text. */
     private void handleDelta(JsonObject msg) {
         String content = msg.has("content") ? msg.get("content").getAsString() : "";
         if (content.isEmpty()) return;
+
+        String toSend = null;
         synchronized (deltaBuffer) {
             deltaBuffer.append(content);
+            toSend = takeDisplayChunk();
+        }
+
+        if (toSend != null && !toSend.isBlank()) {
+            final String chatLine = toSend;
+            runOnServerThread(() -> {
+                ServerPlayer player = playerSupplier.get();
+                if (player != null) {
+                    player.sendSystemMessage(ChatUtil.vbGray(chatLine));
+                }
+            });
         }
     }
 
@@ -201,9 +215,45 @@ public class VbWebSocketClient extends WebSocketClient {
 
     /** Flush and discard any accumulated delta text (used on step/done/error boundaries). */
     private void flushDeltaBuffer() {
+        String remaining;
         synchronized (deltaBuffer) {
+            remaining = deltaBuffer.toString().strip().replaceAll("\\s+", " ");
             deltaBuffer.setLength(0);
         }
+
+        if (remaining != null && !remaining.isBlank()) {
+            final String chatLine = remaining;
+            runOnServerThread(() -> {
+                ServerPlayer player = playerSupplier.get();
+                if (player != null) {
+                    player.sendSystemMessage(ChatUtil.vbGray(chatLine));
+                }
+            });
+        }
+    }
+
+    /** Extracts a readable chunk from the live delta buffer. */
+    private String takeDisplayChunk() {
+        if (deltaBuffer.length() == 0) return null;
+
+        String current = deltaBuffer.toString();
+        int split = -1;
+
+        int newline = current.lastIndexOf('\n');
+        if (newline >= 0) {
+            split = newline + 1;
+        } else if (current.length() >= 180) {
+            int space = current.lastIndexOf(' ');
+            if (space > 80) {
+                split = space + 1;
+            }
+        }
+
+        if (split <= 0) return null;
+
+        String out = current.substring(0, split).strip().replaceAll("\\s+", " ");
+        deltaBuffer.delete(0, split);
+        return out.isEmpty() ? null : out;
     }
 
     private void handleToolCall(JsonObject msg) {
@@ -308,6 +358,7 @@ public class VbWebSocketClient extends WebSocketClient {
     public void sendPrompt(String content, double x, double y, double z) {
         JsonObject msg = new JsonObject();
         msg.addProperty("type", "prompt");
+        msg.addProperty("playerName", session.playerName);
         msg.addProperty("content", content);
         JsonObject pos = new JsonObject();
         pos.addProperty("x", x);
@@ -321,6 +372,14 @@ public class VbWebSocketClient extends WebSocketClient {
     public void sendCancel() {
         JsonObject msg = new JsonObject();
         msg.addProperty("type", "cancel");
+        send(GSON.toJson(msg));
+    }
+
+    /** Register this websocket with the server so HTTP tools can route by player name. */
+    private void sendRegister() {
+        JsonObject msg = new JsonObject();
+        msg.addProperty("type", "register");
+        msg.addProperty("playerName", session.playerName);
         send(GSON.toJson(msg));
     }
 }

@@ -52,8 +52,10 @@ public class BuildDimension {
 
     /**
      * Schedules cleanup of the build dimension after the player has left.
-     * Waits one tick for the teleport to complete, then saves, closes chunk IO,
-     * deletes region files, and reopens. Next time chunks load they'll be fresh void.
+     * Waits one tick for the teleport to complete, then saves and attempts to
+     * delete dimension region files. We intentionally do NOT close chunk IO
+     * during runtime cleanup, because that can leave the build world in a bad
+     * state for subsequent sessions in singleplayer.
      */
     public void scheduleWorldCleanup() {
         // Run on next server tick so the teleport finishes first
@@ -68,28 +70,36 @@ public class BuildDimension {
             }
 
             try {
-                // Save and close chunk storage so file handles are released
+                // Save chunks before cleanup.
                 buildLevel.getChunkSource().save(false);
-                buildLevel.getChunkSource().close();
 
                 // Delete region/entities/poi files
                 Path worldDir = server.getWorldPath(LevelResource.ROOT);
                 Path dimDir = worldDir.resolve("dimensions").resolve("vibe-build").resolve("build_world");
 
                 int deleted = 0;
+                int failed = 0;
                 for (String subdir : new String[]{"region", "entities", "poi"}) {
                     Path dir = dimDir.resolve(subdir);
                     if (Files.isDirectory(dir)) {
                         File[] files = dir.toFile().listFiles();
                         if (files != null) {
                             for (File f : files) {
-                                if (f.delete()) deleted++;
+                                if (f.delete()) {
+                                    deleted++;
+                                } else {
+                                    failed++;
+                                }
                             }
                         }
                     }
                 }
 
-                Vibebuild.LOGGER.info("[VB] Build world cleanup: deleted {} files", deleted);
+                Vibebuild.LOGGER.info(
+                        "[VB] Build world cleanup: deleted {} files, {} could not be deleted",
+                        deleted,
+                        failed
+                );
             } catch (Exception e) {
                 Vibebuild.LOGGER.error("[VB] Build world cleanup failed: {}", e.getMessage(), e);
             }
