@@ -1,6 +1,6 @@
+import { networkInterfaces } from "node:os";
 import { type AnyTextAdapter, chat, toolDefinition } from "@tanstack/ai";
 import { anthropicText } from "@tanstack/ai-anthropic";
-import { networkInterfaces } from "node:os";
 import * as QRCode from "qrcode";
 import { type WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
@@ -17,7 +17,9 @@ const webHost = process.env.WEB_HOST?.trim() || "0.0.0.0";
 const adapter: AnyTextAdapter = anthropicText("claude-opus-4-6");
 const imageAdapter: AnyTextAdapter = anthropicText("claude-sonnet-4-5");
 const wss = new WebSocketServer({ port: wsPort });
-const imageInputHtml = Bun.file(new URL("../public/image-input.html", import.meta.url));
+const imageInputHtml = Bun.file(
+	new URL("../public/image-input.html", import.meta.url),
+);
 
 const getLanIPv4 = (): string | null => {
 	const interfaces = networkInterfaces();
@@ -93,7 +95,8 @@ const sessions = new Map<string, Session>();
 const sessionsByPlayer = new Map<string, string>();
 const socketsBySession = new Map<string, WebSocket>();
 
-const getSuccessStatus = (success: boolean, message: string): string => JSON.stringify({ success, message });
+const getSuccessStatus = (success: boolean, message: string): string =>
+	JSON.stringify({ success, message });
 
 const parsePlayerPos = (x: number, y: number, z: number) => ({
 	x: Math.round(x),
@@ -109,7 +112,9 @@ const jsonResponse = (status: number, body: unknown) =>
 		},
 	});
 
-const collectTextOutput = async (stream: AsyncIterable<{ type: string; [key: string]: unknown }>) => {
+const collectTextOutput = async (
+	stream: AsyncIterable<{ type: string; [key: string]: unknown }>,
+) => {
 	let text = "";
 	let runError: string | null = null;
 	let finishReason: string | null = null;
@@ -152,9 +157,9 @@ const generateBuildPromptFromImage = async (image: File, notes: string) => {
 		mimeType === "image/jpg"
 			? "image/jpeg"
 			: mimeType === "image/png" ||
-				  mimeType === "image/jpeg" ||
-				  mimeType === "image/gif" ||
-				  mimeType === "image/webp"
+					mimeType === "image/jpeg" ||
+					mimeType === "image/gif" ||
+					mimeType === "image/webp"
 				? mimeType
 				: "image/png";
 
@@ -224,7 +229,12 @@ const runPromptPipeline = async (
 		};
 		const flushText = () => {
 			if (textBuffer) {
-				ws.send(JSON.stringify({ type: "text_content_complete", content: textBuffer }));
+				ws.send(
+					JSON.stringify({
+						type: "text_content_complete",
+						content: textBuffer,
+					}),
+				);
 				textBuffer = "";
 			}
 		};
@@ -343,7 +353,9 @@ const runPromptPipeline = async (
 		for (const [i, step] of plan.steps.entries()) {
 			// Check for cancellation between steps
 			if (session.cancelled) {
-				console.log(`[${session.id}] Build cancelled by player at step ${i + 1}`);
+				console.log(
+					`[${session.id}] Build cancelled by player at step ${i + 1}`,
+				);
 				throw new Error("Build cancelled by player");
 			}
 
@@ -408,7 +420,10 @@ const runPromptPipeline = async (
 				`Recent completed steps (latest up to 2): ${
 					plan.steps
 						.slice(Math.max(0, i - 2), i)
-						.map((s, idx) => `${Math.max(0, i - 2) + idx + 1}. ${s.id}: ${s.feature}`)
+						.map(
+							(s, idx) =>
+								`${Math.max(0, i - 2) + idx + 1}. ${s.id}: ${s.feature}`,
+						)
 						.join(" | ") || "none"
 				}`,
 				``,
@@ -483,7 +498,9 @@ const runPromptPipeline = async (
 			`[FINALIZER] "${finalText.trim()}" (${((performance.now() - tFinalizer) / 1000).toFixed(1)}s)`,
 		);
 		if (finalText) {
-			ws.send(JSON.stringify({ type: "text_content_complete", content: finalText }));
+			ws.send(
+				JSON.stringify({ type: "text_content_complete", content: finalText }),
+			);
 		}
 
 		const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
@@ -607,7 +624,10 @@ Bun.serve({
 	fetch: async (request) => {
 		const url = new URL(request.url);
 
-		if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/image-input")) {
+		if (
+			request.method === "GET" &&
+			(url.pathname === "/" || url.pathname === "/image-input")
+		) {
 			return new Response(imageInputHtml, {
 				headers: {
 					"content-type": "text/html; charset=utf-8",
@@ -649,7 +669,9 @@ Bun.serve({
 				}
 
 				if (!image.type.startsWith("image/")) {
-					return jsonResponse(400, { error: "Uploaded file must be an image." });
+					return jsonResponse(400, {
+						error: "Uploaded file must be an image.",
+					});
 				}
 
 				const sessionId = sessionsByPlayer.get(playerName);
@@ -663,16 +685,22 @@ Bun.serve({
 				const session = sessions.get(sessionId);
 				const ws = socketsBySession.get(sessionId);
 				if (!session || !ws) {
-					return jsonResponse(404, { error: "Player session was disconnected." });
+					return jsonResponse(404, {
+						error: "Player session was disconnected.",
+					});
 				}
 
 				if (session.processingPrompt) {
 					return jsonResponse(409, {
-						error: "Build already in progress. Wait for it to finish or /vb cancel.",
+						error:
+							"Build already in progress. Wait for it to finish or /vb cancel.",
 					});
 				}
 
-				const generatedPrompt = await generateBuildPromptFromImage(image, notes);
+				const generatedPrompt = await generateBuildPromptFromImage(
+					image,
+					notes,
+				);
 				session.cancelled = false;
 				const playerPos = parsePlayerPos(x, y, z);
 

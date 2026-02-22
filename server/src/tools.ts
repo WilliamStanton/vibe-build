@@ -576,7 +576,9 @@ export const placeSign = toolDefinition({
 		glowing: z
 			.boolean()
 			.optional()
-			.describe("If true, the sign text glows (like after using a glow ink sac)"),
+			.describe(
+				"If true, the sign text glows (like after using a glow ink sac)",
+			),
 		color: z
 			.enum([
 				"black",
