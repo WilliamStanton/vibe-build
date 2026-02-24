@@ -3,7 +3,7 @@
 	"id": "vibe-build",
 	"version": "${version}",
 	"name": "vibe-build",
-	"description": "AI-powered Minecraft builder. Type /vb <prompt> to build anything with WorldEdit.",
+	"description": "AI-powered Minecraft builder. Type /vb <prompt> to build anything.",
 	"authors": [
 		"vibe-build"
 	],

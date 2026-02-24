@@ -15,7 +15,6 @@ import com.sk89q.worldedit.world.World;
 import com.vibebuild.session.BuildSession;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
 /**

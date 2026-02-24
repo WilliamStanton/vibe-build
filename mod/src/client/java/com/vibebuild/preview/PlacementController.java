@@ -39,8 +39,6 @@ public class PlacementController {
     /** Captured blocks from the build dimension, held here until ghost is activated after teleport. */
     private Map<BlockPos, BlockState> capturedBlocks;
     private int capturedSizeX, capturedSizeY, capturedSizeZ;
-    /** The min corner of the build in the build dimension (used to compute paste offset). */
-    private int capturedMinX, capturedMinY, capturedMinZ;
 
     // Raw key state tracking for PgUp/PgDn and left-click (bypass KeyMapping issues)
     private boolean pgUpWasDown = false;
@@ -117,9 +115,6 @@ public class PlacementController {
         this.capturedSizeX  = maxX - minX + 1;
         this.capturedSizeY  = maxY - minY + 1;
         this.capturedSizeZ  = maxZ - minZ + 1;
-        this.capturedMinX   = minX;
-        this.capturedMinY   = minY;
-        this.capturedMinZ   = minZ;
 
         com.vibebuild.Vibebuild.LOGGER.info("[VB] Captured {} blocks from build dimension ({}x{}x{})",
                 blocks.size(), capturedSizeX, capturedSizeY, capturedSizeZ);

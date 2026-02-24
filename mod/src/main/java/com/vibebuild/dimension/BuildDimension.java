@@ -3,7 +3,6 @@ package com.vibebuild.dimension;
 import com.vibebuild.ChatUtil;
 import com.vibebuild.Vibebuild;
 import com.vibebuild.session.BuildSession;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <!-- Cube face gradients -->
+    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5DE8B0"/>
+      <stop offset="100%" stop-color="#3CC98E"/>
+    </linearGradient>
+    <linearGradient id="left" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2AA876"/>
+      <stop offset="100%" stop-color="#1E8A5E"/>
+    </linearGradient>
+    <linearGradient id="right" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1B7D56"/>
+      <stop offset="100%" stop-color="#145C3F"/>
+    </linearGradient>
+
+    <!-- Sparkle glow -->
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFF4B8" stop-opacity="0.9"/>
+      <stop offset="60%" stop-color="#FFD43B" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#FFD43B" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Scale up and re-center to fill the frame -->
+  <g transform="translate(64,64) scale(1.6) translate(-65,-67)">
+
+  <!-- Isometric cube -->
+  <g transform="translate(64, 64)">
+    <!-- Solid backing to eliminate anti-aliasing gaps between faces -->
+    <polygon points="0,-28  30,-12  30,22  0,38  -30,22  -30,-12" fill="#1E8A5E"/>
+    <!-- Top face -->
+    <polygon points="0,-28  30,-12  0,4  -30,-12" fill="url(#top)"/>
+    <!-- Left face -->
+    <polygon points="-30,-12  0,4  0,38  -30,22" fill="url(#left)"/>
+    <!-- Right face -->
+    <polygon points="30,-12  0,4  0,38  30,22" fill="url(#right)"/>
+  </g>
+
+  <!-- AI Sparkle — upper right area -->
+  <g transform="translate(80, 48)">
+    <!-- Soft glow behind sparkle -->
+    <circle cx="0" cy="0" r="16" fill="url(#glow)"/>
+
+    <!-- 4-pointed star -->
+    <path d="M0,-11 C1,-4 4,-1 11,0 C4,1 1,4 0,11 C-1,4 -4,1 -11,0 C-4,-1 -1,-4 0,-11Z"
+          fill="#FFD43B"/>
+
+    <!-- Inner bright core -->
+    <path d="M0,-5 C0.5,-2 2,-0.5 5,0 C2,0.5 0.5,2 0,5 C-0.5,2 -2,0.5 -5,0 C-2,-0.5 -0.5,-2 0,-5Z"
+          fill="#FFFBE6"/>
+
+    <!-- Tiny secondary sparkle -->
+    <g transform="translate(9, -8) scale(0.3)">
+      <path d="M0,-11 C1,-4 4,-1 11,0 C4,1 1,4 0,11 C-1,4 -4,1 -11,0 C-4,-1 -1,-4 0,-11Z"
+            fill="#FFE588"/>
+    </g>
+
+    <!-- Tiny tertiary sparkle -->
+    <g transform="translate(-7, 10) scale(0.2)">
+      <path d="M0,-11 C1,-4 4,-1 11,0 C4,1 1,4 0,11 C-1,4 -4,1 -11,0 C-4,-1 -1,-4 0,-11Z"
+            fill="#FFE588"/>
+    </g>
+  </g>
+
+  </g>
+</svg>
