@@ -35,8 +35,8 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-	// WorldEdit for Fabric 1.21.11 — provided at runtime, compile-only for the mod
-	modCompileOnly "com.sk89q.worldedit:worldedit-fabric-mc1.21.11:7.4.0"
+	// WorldEdit for Fabric 1.21.11 — required at runtime, users install separately
+	modImplementation "com.sk89q.worldedit:worldedit-fabric-mc1.21.11:7.4.0"
 
 	// Gson for WebSocket message parsing (already on MC classpath, make available at compile time)
 	implementation "com.google.code.gson:gson:2.10.1"
