@@ -1,5 +1,11 @@
 package com.vibebuild.dimension;
 
+import com.sk89q.worldedit.EditSession;
+import com.sk89q.worldedit.WorldEdit;
+import com.sk89q.worldedit.fabric.FabricAdapter;
+import com.sk89q.worldedit.math.BlockVector3;
+import com.sk89q.worldedit.regions.CuboidRegion;
+import com.sk89q.worldedit.world.block.BlockTypes;
 import com.vibebuild.ChatUtil;
 import com.vibebuild.Vibebuild;
 import com.vibebuild.session.BuildSession;
@@ -234,6 +240,41 @@ public class BuildDimension {
 
         // Schedule cleanup of the build dimension after teleport completes
         scheduleWorldCleanup();
+    }
+
+    /**
+     * Clears the build area in the build dimension by setting all blocks to air.
+     * Uses WorldEdit for efficiency. Should be called on the server thread.
+     */
+    public void clearBuildArea(BuildSession session) {
+        if (session.buildMin == null || session.buildMax == null) {
+            Vibebuild.LOGGER.info("[VB] No build bounds to clear");
+            return;
+        }
+
+        ServerLevel buildLevel = server.getLevel(DIMENSION_KEY);
+        if (buildLevel == null) return;
+
+        try {
+            com.sk89q.worldedit.world.World weWorld = FabricAdapter.adapt(buildLevel);
+            BlockVector3 min = BlockVector3.at(
+                    session.buildMin.getX(), session.buildMin.getY(), session.buildMin.getZ());
+            BlockVector3 max = BlockVector3.at(
+                    session.buildMax.getX(), session.buildMax.getY(), session.buildMax.getZ());
+            CuboidRegion region = new CuboidRegion(weWorld, min, max);
+
+            try (EditSession es = WorldEdit.getInstance()
+                    .newEditSessionBuilder()
+                    .world(weWorld)
+                    .build()) {
+                //noinspection DataFlowIssue — AIR is always registered
+                @SuppressWarnings("null")
+                int cleared = es.setBlocks(region, BlockTypes.AIR.getDefaultState());
+                Vibebuild.LOGGER.info("[VB] Cleared {} blocks from build area", cleared);
+            }
+        } catch (Exception e) {
+            Vibebuild.LOGGER.error("[VB] Failed to clear build area: {}", e.getMessage(), e);
+        }
     }
 
     // ── Helpers ──

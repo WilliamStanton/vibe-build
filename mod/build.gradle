@@ -41,12 +41,14 @@ dependencies {
 	// Gson (already on MC classpath, make available at compile time)
 	implementation "com.google.code.gson:gson:2.10.1"
 
-	// langchain4j for AI pipeline (Anthropic / Claude)
+	// langchain4j for AI pipeline (Anthropic + OpenAI)
 	// All transitives must be JiJ'd — they are not on the Minecraft classpath.
 	implementation "dev.langchain4j:langchain4j-anthropic:1.11.0"
+	implementation "dev.langchain4j:langchain4j-open-ai:1.11.0"
 	implementation "dev.langchain4j:langchain4j:1.11.0"
 	implementation "dev.langchain4j:langchain4j-http-client-jdk:1.11.0"
 	include "dev.langchain4j:langchain4j-anthropic:1.11.0"
+	include "dev.langchain4j:langchain4j-open-ai:1.11.0"
 	include "dev.langchain4j:langchain4j:1.11.0"
 	include "dev.langchain4j:langchain4j-core:1.11.0"
 	include "dev.langchain4j:langchain4j-http-client:1.11.0"
@@ -55,6 +57,7 @@ dependencies {
 	include "com.fasterxml.jackson.core:jackson-core:2.20.1"
 	include "com.fasterxml.jackson.core:jackson-annotations:2.20"
 	include "org.apache.opennlp:opennlp-tools:2.5.4"
+	include "com.knuddels:jtokkit:1.1.0"
 }
 
 processResources {

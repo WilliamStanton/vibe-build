@@ -14,6 +14,7 @@ import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -99,17 +100,12 @@ public class BuildPipeline {
             throw new RuntimeException("No API key set. Use /vb apikey <key> to set one.");
         }
 
-        Vibebuild.LOGGER.info("[VB] Building ChatModel with model='{}' apiKey={}...",
-                VibeBuildConfig.getModel(), apiKey.substring(0, Math.min(8, apiKey.length())) + "...");
+        VibeBuildConfig.Provider provider = VibeBuildConfig.getProvider();
+        Vibebuild.LOGGER.info("[VB] Building ChatModel with model='{}' provider={} apiKey={}...",
+                VibeBuildConfig.getModel(), provider, apiKey.substring(0, Math.min(8, apiKey.length())) + "...");
         ChatModel model;
         try {
-            model = AnthropicChatModel.builder()
-                    .httpClientBuilder(new JdkHttpClientBuilder())
-                    .apiKey(apiKey)
-                    .modelName(VibeBuildConfig.getModel())
-                    .maxTokens(16384)
-                    .timeout(Duration.ofHours(1))
-                    .build();
+            model = buildModel(provider, apiKey, VibeBuildConfig.getModel(), 16384);
             Vibebuild.LOGGER.info("[VB] ChatModel built successfully");
         } catch (Exception e) {
             Vibebuild.LOGGER.error("[VB] Failed to build ChatModel: {} - {}", e.getClass().getName(), e.getMessage(), e);
@@ -263,17 +259,33 @@ public class BuildPipeline {
         Vibebuild.LOGGER.info("[VB] [PLANNER] Got response. hasToolCalls={}", response.aiMessage().hasToolExecutionRequests());
 
         AiMessage aiMessage = response.aiMessage();
-        if (!aiMessage.hasToolExecutionRequests()) {
-            throw new RuntimeException("Planner did not call submit_plan. Response: " +
+        String planJson;
+
+        if (aiMessage.hasToolExecutionRequests()) {
+            ToolExecutionRequest toolCall = aiMessage.toolExecutionRequests().get(0);
+            if (!toolCall.name().equals("submit_plan")) {
+                throw new RuntimeException("Planner called unexpected tool: " + toolCall.name());
+            }
+            planJson = toolCall.arguments();
+        } else if (aiMessage.text() != null && aiMessage.text().contains("\"planTitle\"")) {
+            // Some models (e.g. GPT) return the plan as text instead of a tool call — parse it directly
+            Vibebuild.LOGGER.warn("[VB] [PLANNER] Model returned plan as text instead of tool call, parsing directly");
+            String text = aiMessage.text().trim();
+            // Strip markdown code fences if present
+            if (text.startsWith("```")) {
+                int firstNewline = text.indexOf('\n');
+                int lastFence = text.lastIndexOf("```");
+                if (firstNewline != -1 && lastFence > firstNewline) {
+                    text = text.substring(firstNewline + 1, lastFence).trim();
+                }
+            }
+            planJson = text;
+        } else {
+            throw new RuntimeException("Planner did not return a plan. Response: " +
                     (aiMessage.text() != null ? aiMessage.text().substring(0, Math.min(200, aiMessage.text().length())) : "empty"));
         }
 
-        ToolExecutionRequest toolCall = aiMessage.toolExecutionRequests().get(0);
-        if (!toolCall.name().equals("submit_plan")) {
-            throw new RuntimeException("Planner called unexpected tool: " + toolCall.name());
-        }
-
-        Plan plan = Plan.fromJson(toolCall.arguments());
+        Plan plan = Plan.fromJson(planJson);
 
         // Record in history so follow-up prompts have context
         String planSummary = "Plan: \"" + plan.planTitle + "\" at (" +
@@ -368,16 +380,8 @@ public class BuildPipeline {
                 + "Completed: " + plan.steps.size() + " features, " + totalToolCount + " total commands\n"
                 + "Features built: " + plan.steps.stream().map(s -> s.feature).collect(Collectors.joining(", "));
 
-        ChatModel finalizerModel = AnthropicChatModel.builder()
-                .httpClientBuilder(new JdkHttpClientBuilder())
-                .apiKey(VibeBuildConfig.getApiKey())
-                .modelName(VibeBuildConfig.getModel())
-                .maxTokens(1024)
-                .timeout(Duration.ofHours(1))
-                .build();
-
         Vibebuild.LOGGER.info("[VB] [FINALIZER] Sending chat request...");
-        ChatResponse response = finalizerModel.chat(ChatRequest.builder()
+        ChatResponse response = model.chat(ChatRequest.builder()
                 .messages(List.of(
                         SystemMessage.from(loadPrompt("finalizer.txt")),
                         UserMessage.from(userText)))
@@ -429,6 +433,30 @@ public class BuildPipeline {
             return future.get(30, TimeUnit.SECONDS);
         } catch (Exception e) {
             return "{\"success\":false,\"message\":\"Tool execution timed out\"}";
+        }
+    }
+
+    // ── Model construction ──
+
+    private static ChatModel buildModel(VibeBuildConfig.Provider provider, String apiKey,
+                                        String modelName, int maxTokens) {
+        if (provider == VibeBuildConfig.Provider.OPENAI) {
+            return OpenAiChatModel.builder()
+                    .httpClientBuilder(new JdkHttpClientBuilder())
+                    .apiKey(apiKey)
+                    .modelName(modelName)
+                    .maxCompletionTokens(maxTokens)
+                    .timeout(Duration.ofHours(1))
+                    .build();
+        } else {
+            // Anthropic — must use explicit JdkHttpClientBuilder to bypass ServiceLoader
+            return AnthropicChatModel.builder()
+                    .httpClientBuilder(new JdkHttpClientBuilder())
+                    .apiKey(apiKey)
+                    .modelName(modelName)
+                    .maxTokens(maxTokens)
+                    .timeout(Duration.ofHours(1))
+                    .build();
         }
     }
 

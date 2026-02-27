@@ -1,6 +1,5 @@
 package com.vibebuild.command;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -34,24 +33,22 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Registers the /vb command tree.
  *
- * /vb apikey <key>         — set Anthropic API key (persisted)
- * /vb cancel               — cancel current build and teleport back
- * /vb confirm              — accept reviewed build and return to place it
- * /vb <prompt...>          — send a build prompt to the AI
+ * /vb apikey anthropic <key> — set Anthropic API key
+ * /vb apikey openai <key>    — set OpenAI API key
+ * /vb model [name]           — get/set model (auto-detects provider)
+ * /vb image [prompt]         — open file dialog for image-to-build
+ * /vb cancel                 — cancel current build and teleport back
+ * /vb confirm                — accept reviewed build and return to place it
+ * /vb <prompt...>            — send a build prompt to the AI
  */
 public class VbCommand {
 
-    // Cached model list from Anthropic API
+    // Cached model list from provider APIs
     private static List<String> cachedModels = List.of();
     private static long cacheTimestamp = 0;
     private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
     private static final SuggestionProvider<CommandSourceStack> MODEL_SUGGESTIONS = (ctx, builder) -> {
-        String apiKey = VibeBuildConfig.getApiKey();
-        if (apiKey == null || apiKey.isBlank()) {
-            return builder.buildFuture();
-        }
-
         long now = System.currentTimeMillis();
         if (!cachedModels.isEmpty() && (now - cacheTimestamp) < CACHE_TTL_MS) {
             return suggestMatching(builder, cachedModels);
@@ -60,7 +57,7 @@ public class VbCommand {
         // Fetch async so we don't block the server thread
         return CompletableFuture.supplyAsync(() -> {
             try {
-                List<String> models = fetchModels(apiKey);
+                List<String> models = fetchAllModels();
                 cachedModels = models;
                 cacheTimestamp = System.currentTimeMillis();
                 return suggestMatchingSync(builder, models);
@@ -85,29 +82,58 @@ public class VbCommand {
         return builder.build();
     }
 
-    private static List<String> fetchModels(String apiKey) throws Exception {
+    private static List<String> fetchAllModels() {
+        List<String> all = new ArrayList<>();
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://api.anthropic.com/v1/models"))
-                .header("X-Api-Key", apiKey)
-                .header("anthropic-version", "2023-06-01")
-                .GET()
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
-        List<String> models = new ArrayList<>();
-        JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
-        if (json.has("data")) {
-            JsonArray data = json.getAsJsonArray("data");
-            for (JsonElement el : data) {
-                JsonObject model = el.getAsJsonObject();
-                if (model.has("id")) {
-                    models.add(model.get("id").getAsString());
+        // Fetch Anthropic models
+        String anthropicKey = VibeBuildConfig.getAnthropicApiKey();
+        if (anthropicKey != null && !anthropicKey.isBlank()) {
+            try {
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create("https://api.anthropic.com/v1/models"))
+                        .header("X-Api-Key", anthropicKey)
+                        .header("anthropic-version", "2023-06-01")
+                        .GET().build();
+                HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+                JsonObject json = JsonParser.parseString(resp.body()).getAsJsonObject();
+                if (json.has("data")) {
+                    for (JsonElement el : json.getAsJsonArray("data")) {
+                        JsonObject m = el.getAsJsonObject();
+                        if (m.has("id")) all.add(m.get("id").getAsString());
+                    }
                 }
+            } catch (Exception e) {
+                Vibebuild.LOGGER.warn("[VB] Failed to fetch Anthropic models: {}", e.getMessage());
             }
         }
-        models.sort(String::compareTo);
-        return models;
+
+        // Fetch OpenAI models
+        String openaiKey = VibeBuildConfig.getOpenaiApiKey();
+        if (openaiKey != null && !openaiKey.isBlank()) {
+            try {
+                HttpRequest req = HttpRequest.newBuilder()
+                        .uri(URI.create("https://api.openai.com/v1/models"))
+                        .header("Authorization", "Bearer " + openaiKey)
+                        .GET().build();
+                HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+                JsonObject json = JsonParser.parseString(resp.body()).getAsJsonObject();
+                if (json.has("data")) {
+                    for (JsonElement el : json.getAsJsonArray("data")) {
+                        JsonObject m = el.getAsJsonObject();
+                        if (m.has("id")) {
+                            String id = m.get("id").getAsString();
+                            if (id.startsWith("gpt-")) all.add(id);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                Vibebuild.LOGGER.warn("[VB] Failed to fetch OpenAI models: {}", e.getMessage());
+            }
+        }
+
+        all.sort(String::compareTo);
+        return all;
     }
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -115,10 +141,15 @@ public class VbCommand {
             Commands.literal("vb")
                 .requires(CommandSourceStack::isPlayer)
 
-                // /vb apikey <key>
+                // /vb apikey anthropic <key>
+                // /vb apikey openai <key>
                 .then(Commands.literal("apikey")
-                    .then(Commands.argument("key", StringArgumentType.greedyString())
-                        .executes(VbCommand::apikey)))
+                    .then(Commands.literal("anthropic")
+                        .then(Commands.argument("key", StringArgumentType.greedyString())
+                            .executes(ctx -> apikey(ctx, "anthropic"))))
+                    .then(Commands.literal("openai")
+                        .then(Commands.argument("key", StringArgumentType.greedyString())
+                            .executes(ctx -> apikey(ctx, "openai")))))
 
                 // /vb model [name]
                 .then(Commands.literal("model")
@@ -149,18 +180,27 @@ public class VbCommand {
 
     // ── Handlers ──
 
-    private static int apikey(CommandContext<CommandSourceStack> ctx) {
+    private static int apikey(CommandContext<CommandSourceStack> ctx, String provider) {
         ServerPlayer player = ctx.getSource().getPlayer();
         if (player == null) return 0;
 
         String key = StringArgumentType.getString(ctx, "key");
-        VibeBuildConfig.setApiKey(key);
+
+        if (provider.equals("anthropic")) {
+            VibeBuildConfig.setAnthropicApiKey(key);
+        } else {
+            VibeBuildConfig.setOpenaiApiKey(key);
+        }
+
+        // Invalidate model cache so new provider's models show up
+        cachedModels = List.of();
+        cacheTimestamp = 0;
 
         // Mask the key in chat for safety
         String masked = key.length() > 8
                 ? key.substring(0, 4) + "..." + key.substring(key.length() - 4)
                 : "****";
-        player.sendSystemMessage(ChatUtil.vb("API key set: " + masked));
+        player.sendSystemMessage(ChatUtil.vb(provider + " API key set: " + masked));
         return 1;
     }
 
@@ -177,7 +217,8 @@ public class VbCommand {
         ServerPlayer player = ctx.getSource().getPlayer();
         if (player == null) return 0;
 
-        player.sendSystemMessage(ChatUtil.vb("Current model: " + VibeBuildConfig.getModel()));
+        String provider = VibeBuildConfig.getProvider().name().toLowerCase();
+        player.sendSystemMessage(ChatUtil.vb("Current model: " + VibeBuildConfig.getModel() + " (" + provider + ")"));
         return 1;
     }
 
@@ -186,8 +227,9 @@ public class VbCommand {
         if (player == null) return 0;
 
         String name = StringArgumentType.getString(ctx, "name");
+        VibeBuildConfig.Provider provider = VibeBuildConfig.detectProvider(name);
         VibeBuildConfig.setModel(name);
-        player.sendSystemMessage(ChatUtil.vb("Model set to: " + name));
+        player.sendSystemMessage(ChatUtil.vb("Model set to: " + name + " (" + provider.name().toLowerCase() + ")"));
         return 1;
     }
 
@@ -244,6 +286,9 @@ public class VbCommand {
             player.sendSystemMessage(ChatUtil.vb("Nothing to confirm. Build something first with /vb <prompt>."));
             return 0;
         }
+
+        // Clear the build area in the build dimension before leaving
+        Vibebuild.getInstance().getBuildDimension().clearBuildArea(session);
 
         // Teleport back to original world
         Vibebuild.getInstance().getBuildDimension().teleportBack(player, session);
