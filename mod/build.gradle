@@ -38,12 +38,23 @@ dependencies {
 	// WorldEdit for Fabric 1.21.11 — required at runtime, users install separately
 	modImplementation "com.sk89q.worldedit:worldedit-fabric-mc1.21.11:7.4.0"
 
-	// Gson for WebSocket message parsing (already on MC classpath, make available at compile time)
+	// Gson (already on MC classpath, make available at compile time)
 	implementation "com.google.code.gson:gson:2.10.1"
 
-	// Java-WebSocket for client-side WS connection
-	implementation("org.java-websocket:Java-WebSocket:1.5.7") { transitive = false }
-	include("org.java-websocket:Java-WebSocket:1.5.7")
+	// langchain4j for AI pipeline (Anthropic / Claude)
+	// All transitives must be JiJ'd — they are not on the Minecraft classpath.
+	implementation "dev.langchain4j:langchain4j-anthropic:1.11.0"
+	implementation "dev.langchain4j:langchain4j:1.11.0"
+	implementation "dev.langchain4j:langchain4j-http-client-jdk:1.11.0"
+	include "dev.langchain4j:langchain4j-anthropic:1.11.0"
+	include "dev.langchain4j:langchain4j:1.11.0"
+	include "dev.langchain4j:langchain4j-core:1.11.0"
+	include "dev.langchain4j:langchain4j-http-client:1.11.0"
+	include "dev.langchain4j:langchain4j-http-client-jdk:1.11.0"
+	include "com.fasterxml.jackson.core:jackson-databind:2.20.1"
+	include "com.fasterxml.jackson.core:jackson-core:2.20.1"
+	include "com.fasterxml.jackson.core:jackson-annotations:2.20"
+	include "org.apache.opennlp:opennlp-tools:2.5.4"
 }
 
 processResources {

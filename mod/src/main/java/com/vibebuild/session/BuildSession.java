@@ -5,6 +5,9 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Holds all per-player state for a single vibe-build session.
  *
@@ -17,8 +20,8 @@ public class BuildSession {
     public enum Phase {
         IDLE,
         CONNECTED,
-        PLANNING,    // server is producing a plan
-        BUILDING,    // executor is running tool calls
+        PLANNING,    // AI is producing a plan
+        BUILDING,    // AI executor is running tool calls
         REVIEWING,   // build done, player reviewing in build world
         PREVIEWING   // player confirmed, back home, ghost preview active
     }
@@ -28,6 +31,17 @@ public class BuildSession {
 
     // Current phase
     public volatile Phase phase = Phase.CONNECTED;
+
+    // ── Pipeline control ──
+
+    /** Set to true when the player cancels. Checked between tool calls / steps. */
+    public volatile boolean cancelled = false;
+
+    /** Prevent overlapping prompt runs on the same session. */
+    public volatile boolean processingPrompt = false;
+
+    /** Planner chat history — persists across prompts so the AI knows what it already built. */
+    public final List<HistoryMessage> plannerHistory = new ArrayList<>();
 
     // ── Vibe world session state ──
 
@@ -42,7 +56,7 @@ public class BuildSession {
 
     // ── Build state ──
 
-    public BlockPos buildOrigin;   // matches plan.origin from the server
+    public BlockPos buildOrigin;   // matches plan.origin from the AI
     public BlockPos buildMin;      // bounding box min (populated during build)
     public BlockPos buildMax;      // bounding box max (populated during build)
 
@@ -51,5 +65,17 @@ public class BuildSession {
 
     public BuildSession(String playerName) {
         this.playerName = playerName;
+    }
+
+    /**
+     * Simple role+content message for planner history.
+     */
+    public static class HistoryMessage {
+        public final String role;
+        public final String content;
+        public HistoryMessage(String role, String content) {
+            this.role = role;
+            this.content = content;
+        }
     }
 }

@@ -1,26 +1,25 @@
 package com.vibebuild;
 
 import com.vibebuild.command.VbCommand;
+import com.vibebuild.config.VibeBuildConfig;
 import com.vibebuild.dimension.BuildDimension;
 import com.vibebuild.executor.ToolExecutor;
 import com.vibebuild.network.ActivatePreviewPayload;
 import com.vibebuild.network.CancelPreviewPayload;
 import com.vibebuild.network.PreviewReadyPayload;
-import com.vibebuild.network.VbWebSocketClient;
 import com.vibebuild.schematic.SchematicManager;
 import com.vibebuild.session.BuildSession;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -32,25 +31,24 @@ public class Vibebuild implements ModInitializer {
     private static Vibebuild INSTANCE;
     public static Vibebuild getInstance() { return INSTANCE; }
 
-    private final Map<String, BuildSession>       sessions   = new ConcurrentHashMap<>();
-    private final Map<String, VbWebSocketClient>  webSockets = new ConcurrentHashMap<>();
+    private final Map<String, BuildSession> sessions = new ConcurrentHashMap<>();
 
     private MinecraftServer  server;
     private BuildDimension   buildDimension;
     private ToolExecutor     toolExecutor;
     private SchematicManager schematicManager;
 
-    public Map<String, BuildSession>      getSessions()         { return sessions; }
-    public Map<String, VbWebSocketClient> getWebSockets()       { return webSockets; }
-    public MinecraftServer                getServer()           { return server; }
-    public BuildDimension                 getBuildDimension()   { return buildDimension; }
-    public ToolExecutor                   getToolExecutor()     { return toolExecutor; }
-    public SchematicManager               getSchematicManager() { return schematicManager; }
+    public Map<String, BuildSession> getSessions()         { return sessions; }
+    public MinecraftServer           getServer()           { return server; }
+    public BuildDimension            getBuildDimension()   { return buildDimension; }
+    public ToolExecutor              getToolExecutor()     { return toolExecutor; }
+    public SchematicManager          getSchematicManager() { return schematicManager; }
 
     @Override
     public void onInitialize() {
         INSTANCE = this;
 
+        VibeBuildConfig.load();
         toolExecutor     = new ToolExecutor();
         schematicManager = new SchematicManager();
 
@@ -80,31 +78,28 @@ public class Vibebuild implements ModInitializer {
             LOGGER.info("[VB] vibe-build mod ready.");
         });
 
-        // Auto-connect players to the WS server when they join
+        // Create a session for each player on join
         ServerPlayConnectionEvents.JOIN.register((handler, sender, s) -> {
             ServerPlayer player = handler.getPlayer();
             String name = player.getName().getString();
-            if (sessions.containsKey(name)) return; // already connected
+            if (!sessions.containsKey(name)) {
+                sessions.put(name, new BuildSession(name));
+                LOGGER.info("[VB] Session created for {}", name);
+            }
+        });
 
-            try {
-                BuildSession session = new BuildSession(name);
-                VbWebSocketClient ws = new VbWebSocketClient(
-                        new URI("ws://localhost:8080"),
-                        () -> this.server.getPlayerList().getPlayerByName(name),
-                        session
-                );
-                ws.connect();
-                sessions.put(name, session);
-                webSockets.put(name, ws);
-                LOGGER.info("[VB] Auto-connecting {} to vibe-build server", name);
-            } catch (Exception e) {
-                LOGGER.warn("[VB] Auto-connect failed for {}: {}", name, e.getMessage());
+        // Clean up sessions on disconnect
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, s) -> {
+            String name = handler.getPlayer().getName().getString();
+            BuildSession session = sessions.remove(name);
+            if (session != null) {
+                session.cancelled = true; // stop any running pipeline
+                LOGGER.info("[VB] Session removed for {}", name);
             }
         });
 
         ServerLifecycleEvents.SERVER_STOPPING.register(s -> {
-            webSockets.values().forEach(ws -> { try { ws.closeBlocking(); } catch (Exception ignored) {} });
-            webSockets.clear();
+            sessions.values().forEach(session -> session.cancelled = true);
             sessions.clear();
         });
 
