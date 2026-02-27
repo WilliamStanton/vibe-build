@@ -10,7 +10,7 @@ import com.sk89q.worldedit.fabric.FabricAdapter;
 import com.sk89q.worldedit.function.mask.Mask;
 import com.sk89q.worldedit.function.pattern.Pattern;
 import com.sk89q.worldedit.math.BlockVector3;
-import com.sk89q.worldedit.math.Vector3;
+import com.sk89q.worldedit.math.transform.Identity;
 import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldedit.util.Direction;
 import com.sk89q.worldedit.world.World;
@@ -266,9 +266,11 @@ public class ToolExecutor {
         CuboidRegion region = cuboid(a);
         String expression = str(a, "expression");
         int count = es.deformRegion(region,
-                Vector3.ZERO,
-                Vector3.ONE,
-                expression);
+                new Identity(),
+                expression,
+                -1,
+                es,
+                new Identity());
         return count + " blocks deformed";
     }
 
