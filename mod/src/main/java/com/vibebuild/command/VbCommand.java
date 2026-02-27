@@ -1,8 +1,15 @@
 package com.vibebuild.command;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.vibebuild.ChatUtil;
 import com.vibebuild.Vibebuild;
 import com.vibebuild.ai.BuildPipeline;
@@ -15,6 +22,14 @@ import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
 /**
  * Registers the /vb command tree.
  *
@@ -24,6 +39,75 @@ import net.minecraft.server.level.ServerPlayer;
  * /vb <prompt...>          — send a build prompt to the AI
  */
 public class VbCommand {
+
+    // Cached model list from Anthropic API
+    private static List<String> cachedModels = List.of();
+    private static long cacheTimestamp = 0;
+    private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+    private static final SuggestionProvider<CommandSourceStack> MODEL_SUGGESTIONS = (ctx, builder) -> {
+        String apiKey = VibeBuildConfig.getApiKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            return builder.buildFuture();
+        }
+
+        long now = System.currentTimeMillis();
+        if (!cachedModels.isEmpty() && (now - cacheTimestamp) < CACHE_TTL_MS) {
+            return suggestMatching(builder, cachedModels);
+        }
+
+        // Fetch async so we don't block the server thread
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                List<String> models = fetchModels(apiKey);
+                cachedModels = models;
+                cacheTimestamp = System.currentTimeMillis();
+                return suggestMatchingSync(builder, models);
+            } catch (Exception e) {
+                Vibebuild.LOGGER.warn("[VB] Failed to fetch models for autocomplete: {}", e.getMessage());
+                return builder.build();
+            }
+        });
+    };
+
+    private static CompletableFuture<Suggestions> suggestMatching(SuggestionsBuilder builder, List<String> options) {
+        return CompletableFuture.completedFuture(suggestMatchingSync(builder, options));
+    }
+
+    private static Suggestions suggestMatchingSync(SuggestionsBuilder builder, List<String> options) {
+        String remaining = builder.getRemaining().toLowerCase();
+        for (String option : options) {
+            if (option.toLowerCase().startsWith(remaining)) {
+                builder.suggest(option);
+            }
+        }
+        return builder.build();
+    }
+
+    private static List<String> fetchModels(String apiKey) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.anthropic.com/v1/models"))
+                .header("X-Api-Key", apiKey)
+                .header("anthropic-version", "2023-06-01")
+                .GET()
+                .build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        List<String> models = new ArrayList<>();
+        JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
+        if (json.has("data")) {
+            JsonArray data = json.getAsJsonArray("data");
+            for (JsonElement el : data) {
+                JsonObject model = el.getAsJsonObject();
+                if (model.has("id")) {
+                    models.add(model.get("id").getAsString());
+                }
+            }
+        }
+        models.sort(String::compareTo);
+        return models;
+    }
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
@@ -39,6 +123,7 @@ public class VbCommand {
                 .then(Commands.literal("model")
                     .executes(VbCommand::modelGet)
                     .then(Commands.argument("name", StringArgumentType.greedyString())
+                        .suggests(MODEL_SUGGESTIONS)
                         .executes(VbCommand::modelSet)))
 
                 // /vb cancel

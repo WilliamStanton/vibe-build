@@ -30,7 +30,14 @@ public class VbPasteCommand {
             Commands.literal("vb")
                 .then(
                     Commands.literal("paste")
-                        .requires(CommandSourceStack::isPlayer)
+                        .requires(src -> {
+                            if (!src.isPlayer()) return false;
+                            ServerPlayer p = src.getPlayer();
+                            if (p == null) return false;
+                            BuildSession s = Vibebuild.getInstance().getSessions()
+                                    .get(p.getName().getString());
+                            return s != null && s.phase == BuildSession.Phase.PREVIEWING;
+                        })
                         .then(
                             Commands.argument("x", IntegerArgumentType.integer())
                                 .then(
