@@ -4,8 +4,11 @@ import com.vibebuild.command.VbCommand;
 import com.vibebuild.config.VibeBuildConfig;
 import com.vibebuild.dimension.BuildDimension;
 import com.vibebuild.executor.ToolExecutor;
+import com.vibebuild.ai.BuildPipeline;
 import com.vibebuild.network.ActivatePreviewPayload;
 import com.vibebuild.network.CancelPreviewPayload;
+import com.vibebuild.network.ImagePromptPayload;
+import com.vibebuild.network.OpenImageDialogPayload;
 import com.vibebuild.network.PreviewReadyPayload;
 import com.vibebuild.schematic.SchematicManager;
 import com.vibebuild.session.BuildSession;
@@ -64,6 +67,54 @@ public class Vibebuild implements ModInitializer {
         PayloadTypeRegistry.playS2C().register(
                 CancelPreviewPayload.TYPE,
                 CancelPreviewPayload.CODEC
+        );
+        PayloadTypeRegistry.playS2C().register(
+                OpenImageDialogPayload.TYPE,
+                OpenImageDialogPayload.CODEC
+        );
+
+        // C2S: image prompt from client
+        PayloadTypeRegistry.playC2S().register(
+                ImagePromptPayload.TYPE,
+                ImagePromptPayload.CODEC
+        );
+        ServerPlayNetworking.registerGlobalReceiver(
+                ImagePromptPayload.TYPE,
+                (payload, ctx) -> {
+                    ServerPlayer player = ctx.player();
+                    String name = player.getName().getString();
+                    BuildSession session = sessions.get(name);
+                    if (session == null) {
+                        player.sendSystemMessage(ChatUtil.vbError("No active session."));
+                        return;
+                    }
+                    if (session.phase != BuildSession.Phase.CONNECTED && session.phase != BuildSession.Phase.REVIEWING) {
+                        player.sendSystemMessage(ChatUtil.vb("Busy — wait for the current build to finish, or /vb cancel."));
+                        return;
+                    }
+
+                    // Determine player position
+                    double x, y, z;
+                    if (session.inVibeWorldSession) {
+                        x = session.originalX;
+                        y = session.originalY;
+                        z = session.originalZ;
+                    } else {
+                        x = player.getX();
+                        y = player.getY();
+                        z = player.getZ();
+                    }
+
+                    net.minecraft.core.BlockPos playerPos = new net.minecraft.core.BlockPos(
+                            (int) Math.round(x),
+                            (int) Math.round(y),
+                            (int) Math.round(z)
+                    );
+
+                    player.sendSystemMessage(ChatUtil.vb("Image received! Starting build..."));
+                    BuildPipeline.runAsync(player, session, payload.prompt(),
+                            payload.imageBytes(), payload.mimeType(), playerPos);
+                }
         );
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->

@@ -1,7 +1,9 @@
 package com.vibebuild;
 
+import com.vibebuild.command.VbClientCommand;
 import com.vibebuild.network.ActivatePreviewPayload;
 import com.vibebuild.network.CancelPreviewPayload;
+import com.vibebuild.network.OpenImageDialogPayload;
 import com.vibebuild.network.PreviewReadyPayload;
 import com.vibebuild.preview.GhostRenderer;
 import com.vibebuild.preview.PlacementController;
@@ -23,6 +25,16 @@ public class VibebuildClient implements ClientModInitializer {
 
         placementController = new PlacementController();
         placementController.registerTick();
+
+        // Packet: Open image dialog — server tells client to open a file picker
+        ClientPlayNetworking.registerGlobalReceiver(
+                OpenImageDialogPayload.TYPE,
+                (payload, ctx) -> {
+                    ctx.client().execute(() -> {
+                        VbClientCommand.openImageDialog(payload.prompt());
+                    });
+                }
+        );
 
         // Packet 1: Build bounds — capture blocks from the build dimension while still there.
         // Received during REVIEWING phase before the player types /vb confirm.

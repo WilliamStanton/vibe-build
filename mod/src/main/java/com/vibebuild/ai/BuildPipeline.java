@@ -23,6 +23,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -39,9 +40,25 @@ public class BuildPipeline {
     private static final Gson GSON = new Gson();
 
     /**
-     * Start the pipeline asynchronously for the given player and prompt.
+     * Start the pipeline asynchronously for the given player and text prompt.
      */
     public static void runAsync(ServerPlayer player, BuildSession session, String prompt, BlockPos playerPos) {
+        session.imageBase64 = null;
+        session.imageMimeType = null;
+        launchAsync(player, session, prompt, playerPos);
+    }
+
+    /**
+     * Start the pipeline asynchronously with an image + text prompt.
+     */
+    public static void runAsync(ServerPlayer player, BuildSession session, String prompt,
+                                byte[] imageBytes, String mimeType, BlockPos playerPos) {
+        session.imageBase64 = Base64.getEncoder().encodeToString(imageBytes);
+        session.imageMimeType = mimeType;
+        launchAsync(player, session, prompt, playerPos);
+    }
+
+    private static void launchAsync(ServerPlayer player, BuildSession session, String prompt, BlockPos playerPos) {
         if (session.processingPrompt) {
             player.sendSystemMessage(ChatUtil.vbError("Build already in progress. Wait or /vb cancel."));
             return;
@@ -215,9 +232,25 @@ public class BuildPipeline {
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(SystemMessage.from(loadPrompt("spatial.txt")));
         messages.add(SystemMessage.from(loadPrompt("planner.txt")));
-        for (BuildSession.HistoryMessage msg : session.plannerHistory) {
-            if (msg.role.equals("user")) messages.add(UserMessage.from(msg.content));
-            else messages.add(AiMessage.from(msg.content));
+
+        // Add history — all text-only except possibly the last user message which may have an image
+        for (int i = 0; i < session.plannerHistory.size(); i++) {
+            BuildSession.HistoryMessage msg = session.plannerHistory.get(i);
+            boolean isLastUserMsg = msg.role.equals("user") && i == session.plannerHistory.size() - 1;
+
+            if (msg.role.equals("user")) {
+                if (isLastUserMsg && session.imageBase64 != null) {
+                    // Multimodal: text + image
+                    messages.add(UserMessage.from(
+                            TextContent.from(msg.content),
+                            ImageContent.from(session.imageBase64, session.imageMimeType)
+                    ));
+                } else {
+                    messages.add(UserMessage.from(msg.content));
+                }
+            } else {
+                messages.add(AiMessage.from(msg.content));
+            }
         }
 
         ToolSpecification submitPlan = ToolSpecs.submitPlan();

@@ -15,6 +15,7 @@ import com.vibebuild.Vibebuild;
 import com.vibebuild.ai.BuildPipeline;
 import com.vibebuild.config.VibeBuildConfig;
 import com.vibebuild.network.CancelPreviewPayload;
+import com.vibebuild.network.OpenImageDialogPayload;
 import com.vibebuild.session.BuildSession;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.commands.CommandSourceStack;
@@ -126,6 +127,12 @@ public class VbCommand {
                         .suggests(MODEL_SUGGESTIONS)
                         .executes(VbCommand::modelSet)))
 
+                // /vb image [prompt]
+                .then(Commands.literal("image")
+                    .executes(ctx -> image(ctx, "Build what you see in this image"))
+                    .then(Commands.argument("prompt", StringArgumentType.greedyString())
+                        .executes(ctx -> image(ctx, StringArgumentType.getString(ctx, "prompt")))))
+
                 // /vb cancel
                 .then(Commands.literal("cancel")
                     .executes(VbCommand::cancel))
@@ -154,6 +161,15 @@ public class VbCommand {
                 ? key.substring(0, 4) + "..." + key.substring(key.length() - 4)
                 : "****";
         player.sendSystemMessage(ChatUtil.vb("API key set: " + masked));
+        return 1;
+    }
+
+    private static int image(CommandContext<CommandSourceStack> ctx, String prompt) {
+        ServerPlayer player = ctx.getSource().getPlayer();
+        if (player == null) return 0;
+
+        // Send S2C packet telling the client to open a file dialog
+        ServerPlayNetworking.send(player, new OpenImageDialogPayload(prompt));
         return 1;
     }
 

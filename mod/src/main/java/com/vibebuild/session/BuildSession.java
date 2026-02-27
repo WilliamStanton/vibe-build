@@ -54,6 +54,13 @@ public class BuildSession {
     public float originalYaw, originalPitch;
     public GameType originalGameMode;
 
+    // ── Image prompt (for current build only) ──
+
+    /** Base64-encoded image data for the current build, or null if text-only. */
+    public String imageBase64;
+    /** MIME type of the image (e.g. "image/png"), or null. */
+    public String imageMimeType;
+
     // ── Build state ──
 
     public BlockPos buildOrigin;   // matches plan.origin from the AI
