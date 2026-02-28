@@ -12,13 +12,23 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.core.BlockPos;
 
+/**
+ * Client-side mod entry point.
+ *
+ * Manages the ghost-preview flow: receives build-bounds and activate packets
+ * from the server, drives {@link PlacementController} for left-click placement,
+ * and renders ghost blocks each frame via {@link GhostRenderer}.
+ */
 public class VibebuildClient implements ClientModInitializer {
 
     private static VibebuildClient INSTANCE;
+    /** Returns the singleton set during {@link #onInitializeClient()}. */
     public static VibebuildClient getInstance() { return INSTANCE; }
 
+    /** Owns the captured block set and handles player input during ghost preview. */
     private PlacementController placementController;
 
+    /** Registers packet handlers, the tick loop, and the per-frame render hook. */
     @Override
     public void onInitializeClient() {
         INSTANCE = this;
@@ -80,5 +90,6 @@ public class VibebuildClient implements ClientModInitializer {
         });
     }
 
+    /** Returns the active placement controller for use by client-side mixins or commands. */
     public PlacementController getPlacementController() { return placementController; }
 }

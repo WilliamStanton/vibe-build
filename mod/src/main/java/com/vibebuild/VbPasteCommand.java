@@ -25,6 +25,13 @@ import net.minecraft.server.level.ServerPlayer;
  */
 public class VbPasteCommand {
 
+    /**
+     * Registers the {@code /vb paste <x> <y> <z> <rotation>} subcommand.
+     *
+     * Only available to players whose session is in the {@code PREVIEWING} phase.
+     * Applies the optional rotation (0, 90, 180, or 270 degrees) to the WorldEdit
+     * clipboard, then pastes it at the given coordinates in the player's current world.
+     */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
             Commands.literal("vb")

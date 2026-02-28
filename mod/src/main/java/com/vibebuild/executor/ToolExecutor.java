@@ -46,6 +46,13 @@ public class ToolExecutor {
     /** Read-only inspection tools must never affect schematic/preview bounds. */
     private static final Set<String> READ_ONLY_TOOLS = Set.of("read_block", "read_region");
 
+    /**
+     * Executes one tool call from the AI executor stage.
+     *
+     * Routes to native Minecraft API for {@code place_sign}, {@code read_block}, and
+     * {@code read_region}; opens a WorldEdit {@link EditSession} for all other tools.
+     * Returns a JSON object with {@code success} (boolean) and {@code message} (string).
+     */
     public JsonObject execute(ServerPlayer player, BuildSession session, String toolName, JsonObject args) {
         // Handle non-WorldEdit tools that use native Minecraft API
         if (toolName.equals("place_sign") || toolName.equals("read_block") || toolName.equals("read_region")) {

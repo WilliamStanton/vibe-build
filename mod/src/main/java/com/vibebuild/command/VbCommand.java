@@ -11,7 +11,7 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.vibebuild.ChatUtil;
 import com.vibebuild.Vibebuild;
-import com.vibebuild.ai.BuildPipeline;
+import com.vibebuild.build.ai.BuildPipeline;
 import com.vibebuild.redstone.ai.RedstonePipeline;
 import com.vibebuild.config.VibeBuildConfig;
 import com.vibebuild.network.CancelPreviewPayload;
@@ -44,8 +44,9 @@ import java.util.concurrent.CompletableFuture;
  */
 public class VbCommand {
 
-    // Cached model list from provider APIs
+    /** Model names fetched from provider APIs for /vb model autocomplete. Refreshed every {@link #CACHE_TTL_MS} ms. */
     private static List<String> cachedModels = List.of();
+    /** Epoch-ms timestamp of the last successful model list fetch. */
     private static long cacheTimestamp = 0;
     private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -83,6 +84,11 @@ public class VbCommand {
         return builder.build();
     }
 
+    /**
+     * Fetches available model IDs from all configured providers (Anthropic and OpenAI).
+     * Only queries a provider if its API key is set. Returns a sorted, deduplicated list.
+     * Called on a background thread — blocking HTTP is intentional here.
+     */
     private static List<String> fetchAllModels() {
         List<String> all = new ArrayList<>();
         HttpClient client = HttpClient.newHttpClient();
@@ -137,6 +143,7 @@ public class VbCommand {
         return all;
     }
 
+    /** Registers the full {@code /vb} command tree described in the class Javadoc. */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
             Commands.literal("vb")

@@ -19,6 +19,7 @@ import java.nio.file.Path;
  */
 public class VibeBuildConfig {
 
+    /** AI provider for model calls. Auto-detected from the model name by {@link #detectProvider}. */
     public enum Provider {
         ANTHROPIC, OPENAI
     }
@@ -27,12 +28,16 @@ public class VibeBuildConfig {
     private static final Path CONFIG_PATH = FabricLoader.getInstance()
             .getConfigDir().resolve("vibe-build.json");
 
+    // In-memory config state — persisted to CONFIG_PATH on every mutation.
     private static String anthropicApiKey = "";
     private static String openaiApiKey = "";
     private static String model = "claude-opus-4-6";
 
+    /** Raw Anthropic API key, or empty string if not set. */
     public static String getAnthropicApiKey() { return anthropicApiKey; }
+    /** Raw OpenAI API key, or empty string if not set. */
     public static String getOpenaiApiKey()    { return openaiApiKey; }
+    /** Currently configured model name. Defaults to {@code claude-opus-4-6}. */
     public static String getModel()           { return model; }
 
     /**
@@ -49,6 +54,7 @@ public class VibeBuildConfig {
         return detectProvider(model);
     }
 
+    /** Infers the provider from a model name string using prefix heuristics (gpt-*, o1-*, o3-*, etc.). */
     public static Provider detectProvider(String modelName) {
         if (modelName == null) return Provider.ANTHROPIC;
         String lower = modelName.toLowerCase();
@@ -59,21 +65,25 @@ public class VibeBuildConfig {
         return Provider.ANTHROPIC;
     }
 
+    /** Sets the Anthropic API key and persists config to disk. */
     public static void setAnthropicApiKey(String key) {
         anthropicApiKey = key;
         save();
     }
 
+    /** Sets the OpenAI API key and persists config to disk. */
     public static void setOpenaiApiKey(String key) {
         openaiApiKey = key;
         save();
     }
 
+    /** Sets the active model name and persists config to disk. */
     public static void setModel(String modelName) {
         model = modelName;
         save();
     }
 
+    /** Reads config from {@code ~/.minecraft/config/vibe-build.json}. No-ops if the file doesn't exist. */
     public static void load() {
         if (!Files.exists(CONFIG_PATH)) return;
         try {

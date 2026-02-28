@@ -4,7 +4,7 @@ import com.vibebuild.command.VbCommand;
 import com.vibebuild.config.VibeBuildConfig;
 import com.vibebuild.dimension.BuildDimension;
 import com.vibebuild.executor.ToolExecutor;
-import com.vibebuild.ai.BuildPipeline;
+import com.vibebuild.build.ai.BuildPipeline;
 import com.vibebuild.redstone.executor.RedstoneToolExecutor;
 import com.vibebuild.network.ActivatePreviewPayload;
 import com.vibebuild.network.CancelPreviewPayload;
@@ -27,14 +27,25 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Server-side mod entry point and singleton.
+ *
+ * Owns all server-side singletons: build dimension, tool executors, and
+ * schematic manager. Registers networking payloads, commands, and server
+ * lifecycle events on startup. Access the active instance via {@link #getInstance()}.
+ */
 public class Vibebuild implements ModInitializer {
 
+    /** Fabric mod ID; used as namespace in registry keys and packet IDs. */
     public static final String MOD_ID = "vibe-build";
+    /** Shared logger for all server-side VibeBuild output. */
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     private static Vibebuild INSTANCE;
+    /** Returns the singleton set during {@link #onInitialize()}. */
     public static Vibebuild getInstance() { return INSTANCE; }
 
+    /** Live sessions keyed by player name. Created on join, removed on disconnect. */
     private final Map<String, BuildSession> sessions = new ConcurrentHashMap<>();
 
     private MinecraftServer      server;

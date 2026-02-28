@@ -7,8 +7,8 @@ import java.nio.charset.StandardCharsets;
 /**
  * Loads packaged prompt resources from {@code src/main/resources/prompts}.
  *
- * <p>Callers provide a path relative to that root, for example
- * {@code build/planner.txt} or {@code redstone/executor.txt}.</p>
+ * Callers provide a path relative to that root, for example
+ * {@code build/planner.txt} or {@code redstone/executor.txt}.
  */
 public final class PromptLoader {
 

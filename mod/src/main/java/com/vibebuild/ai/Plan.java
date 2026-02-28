@@ -14,8 +14,11 @@ public class Plan {
 
     private static final Gson GSON = new Gson();
 
+    /** Human-readable title for the build, provided by the planner. */
     public final String planTitle;
+    /** World coordinates where the build is anchored (always {@code (0, 64, 0)} in the build dimension). */
     public final Origin origin;
+    /** Ordered list of build steps to execute sequentially. */
     public final List<Step> steps;
 
     public Plan(String planTitle, Origin origin, List<Step> steps) {
@@ -24,14 +27,24 @@ public class Plan {
         this.steps = steps;
     }
 
+    /** World coordinates anchoring the build, deserialized from the planner tool call. */
     public static class Origin {
-        public final int x, y, z;
+        /** Block X coordinate. */
+        public final int x;
+        /** Block Y coordinate. */
+        public final int y;
+        /** Block Z coordinate. */
+        public final int z;
         public Origin(int x, int y, int z) { this.x = x; this.y = y; this.z = z; }
     }
 
+    /** A single build step produced by the planner, deserialized from the planner tool call. */
     public static class Step {
+        /** Short identifier for this step (e.g. {@code "step_1"}). */
         public final String id;
+        /** Brief label describing the feature being built (e.g. {@code "foundation"}). */
         public final String feature;
+        /** Detailed instructions for the executor agent. */
         public final String details;
         public Step(String id, String feature, String details) {
             this.id = id; this.feature = feature; this.details = details;

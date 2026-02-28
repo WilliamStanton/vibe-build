@@ -1,4 +1,4 @@
-package com.vibebuild.ai;
+package com.vibebuild.build.ai;
 
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.model.chat.request.json.*;
@@ -6,10 +6,10 @@ import dev.langchain4j.model.chat.request.json.*;
 import java.util.List;
 
 /**
- * Defines all langchain4j ToolSpecification objects for the AI pipeline.
+ * Defines all langchain4j ToolSpecification objects for the build pipeline.
  * Matches the tool contracts that ToolExecutor can handle.
  */
-public class ToolSpecs {
+public class BuildToolSpecs {
 
     // ── Shared schema fragments ──
 

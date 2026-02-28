@@ -30,7 +30,8 @@ It now runs as a **fully in-mod serverless system**: no external backend process
 2. Executor runs redstone-focused and WorldEdit tools
 3. Finalizer summarizes behavior and activation expectations
 
-Both flows share session/review/preview systems, but redstone has its own planning and execution prompts.
+Both flows share session/review/preview systems and a shared pipeline runner orchestration layer,
+while keeping its own prompts, planner memory, tools, and executor behavior.
 
 ## In-game commands 🎮
 

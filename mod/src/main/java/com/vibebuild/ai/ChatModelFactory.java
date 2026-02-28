@@ -19,11 +19,23 @@ public final class ChatModelFactory {
     private ChatModelFactory() {}
 
     /**
+     * Create a chat model from the current persisted config.
+     *
+     * This keeps callers from repeating provider/model/api key lookups.
+     */
+    public static ChatModel createFromConfig(int maxTokens) {
+        VibeBuildConfig.Provider provider = VibeBuildConfig.getProvider();
+        String apiKey = VibeBuildConfig.getApiKey();
+        String modelName = VibeBuildConfig.getModel();
+        return create(provider, apiKey, modelName, maxTokens);
+    }
+
+    /**
      * Create a chat model for the selected provider using shared defaults.
      *
-     * <p>OpenAI and Anthropic use different token parameter names, so this
+     * OpenAI and Anthropic use different token parameter names, so this
      * method maps the shared {@code maxTokens} argument to the correct builder
-     * option for each provider.</p>
+     * option for each provider.
      */
     public static ChatModel create(VibeBuildConfig.Provider provider, String apiKey,
                                    String modelName, int maxTokens) {

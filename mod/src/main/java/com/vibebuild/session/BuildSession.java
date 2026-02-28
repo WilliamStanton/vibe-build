@@ -17,6 +17,16 @@ import java.util.List;
  */
 public class BuildSession {
 
+    /**
+     * State machine for a player's build lifecycle.
+     *
+     * Typical transitions:
+     *   IDLE → CONNECTED (player joins)
+     *   CONNECTED → PLANNING → BUILDING (pipeline starts)
+     *   BUILDING → REVIEWING (build done, player can inspect)
+     *   REVIEWING → PREVIEWING (player types /vb confirm, teleported back)
+     *   Any state → CONNECTED (player types /vb cancel)
+     */
     public enum Phase {
         IDLE,
         CONNECTED,
@@ -26,18 +36,22 @@ public class BuildSession {
         PREVIEWING   // player confirmed, back home, ghost preview active
     }
 
+    /**
+     * Which AI pipeline is currently active. Drives feedback text in
+     * {@link com.vibebuild.command.VbCommand} (e.g. "build" vs "circuit").
+     */
     public enum AgentType {
         BUILD,
         REDSTONE
     }
 
-    // Player identity
+    /** Immutable player name; used as the session map key in {@link com.vibebuild.Vibebuild}. */
     public final String playerName;
 
-    // Current phase
+    /** Current lifecycle phase. Written from pipeline threads; read from server thread. */
     public volatile Phase phase = Phase.CONNECTED;
 
-    // Active pipeline identity for command UX text.
+    /** Which pipeline last ran. Updated before each pipeline starts so cancel/status UX is correct. */
     public volatile AgentType activeAgent = AgentType.BUILD;
 
     // ── Pipeline control ──
@@ -59,7 +73,7 @@ public class BuildSession {
     /** True while the player is inside the build dimension (from first prompt until confirm/cancel). */
     public boolean inVibeWorldSession = false;
 
-    /** Saved once at session start, restored once at session end. */
+    /** Player's dimension, position, orientation, and game mode before entering the build dimension. Restored on confirm or cancel. */
     public ResourceKey<Level> originalDimension;
     public double originalX, originalY, originalZ;
     public float originalYaw, originalPitch;

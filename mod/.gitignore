@@ -5,6 +5,10 @@ build/
 out/
 classes/
 
+# keep source package named "build" tracked
+!src/main/java/com/vibebuild/build/
+!src/main/java/com/vibebuild/build/**
+
 # eclipse
 
 *.launch
