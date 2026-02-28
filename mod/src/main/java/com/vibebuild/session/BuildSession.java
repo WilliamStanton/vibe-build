@@ -26,11 +26,19 @@ public class BuildSession {
         PREVIEWING   // player confirmed, back home, ghost preview active
     }
 
+    public enum AgentType {
+        BUILD,
+        REDSTONE
+    }
+
     // Player identity
     public final String playerName;
 
     // Current phase
     public volatile Phase phase = Phase.CONNECTED;
+
+    // Active pipeline identity for command UX text.
+    public volatile AgentType activeAgent = AgentType.BUILD;
 
     // ── Pipeline control ──
 
@@ -42,6 +50,9 @@ public class BuildSession {
 
     /** Planner chat history — persists across prompts so the AI knows what it already built. */
     public final List<HistoryMessage> plannerHistory = new ArrayList<>();
+
+    /** Redstone planner chat history — persists across prompts for redstone circuit refinement. */
+    public final List<HistoryMessage> redstonePlannerHistory = new ArrayList<>();
 
     // ── Vibe world session state ──
 

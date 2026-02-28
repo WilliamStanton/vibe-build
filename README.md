@@ -1,54 +1,61 @@
-# VibeBuild - Vibe coding, but for Minecraft
----
+# VibeBuild - vibe coding, but for Minecraft 🧱
 
-VibeBuild turns one prompt or image into a complete build in just minutes with no user input required.
+VibeBuild turns one prompt or image into a complete Minecraft build in minutes.
 
-Player can place the result back into their world with ghost preview controls, or continue prompting to build more complex structures.
+It now runs as a **fully in-mod serverless system**: no external backend process, no websocket bridge, no Bun runtime.
+
 - [Showcase Gallery](SHOWCASE.md)
 
-## Agent Crew 🤖
+## What it can do 🤖
 
-VibeBuild uses a multi-agent pipeline so each stage does one job well.
-
-| Agent | Job | Player benefit |
-| --- | --- | --- |
-| Image agent | Converts a reference image + notes into a build-ready prompt | Easier input when words are not enough |
-| Planner agent | Creates a structured build plan with origin and ordered steps | Coherent, high-quality build sequence |
-| Executor agent | Calls WorldEdit tools step-by-step and adapts from tool results | Fast and reliable in-game construction |
-| Finalizer agent | Produces a clear summary of what was built | Better transparency and confidence |
-
-## Build modes 🧭
-
-VibeBuild has two input modes:
-
-- Text mode (`/vb <prompt...>`): direct natural-language prompt from in-game chat.
-- Image mode (`/vb image`): opens a webpage or scans QR code, where you upload a reference image + optional notes, then the image agent sends it to be built.
+- Build structures from text with `/vb <prompt...>`
+- Build redstone circuits with `/vb redstone <prompt...>`
+- Build from image references with `/vb image [prompt]`
+- Let you review in a dedicated build dimension
+- Place back into your world with ghost preview controls
 
 ## How it works ⚙️
 
-1. Player chooses their mode.
-2. Planner Agent creates a structured plan.
-3. Executor Agent runs steps via tool calls sent to the Minecraft mod via WebSocket.
-4. Player reviews, adds follow-up prompts if desired, confirms, and places via ghost preview.
+### Build flow
 
-Executor context is token-optimized:
+1. (Image mode only) converts image + notes into a build request
+2. Planner creates a structured build plan
+3. Executor performs tool calls step-by-step in the build dimension
+4. Finalizer summarizes what was built
+5. You review, then `/vb confirm` to place with ghost preview
 
-- planner history keeps a plan summary for follow-up prompts
-- each executor call includes current step + up to 2 previous completed steps (window)
+### Redstone flow
 
+1. Planner creates circuit subsystems and signal flow order
+2. Executor runs redstone-focused and WorldEdit tools
+3. Finalizer summarizes behavior and activation expectations
+
+Both flows share session/review/preview systems, but redstone has its own planning and execution prompts.
 
 ## In-game commands 🎮
 
 | Command | Purpose |
 | --- | --- |
 | `/vb <prompt...>` | Generate and build from text |
-| `/vb image` | Start separate image upload mode (image + notes -> generated build prompt) |
+| `/vb redstone <prompt...>` | Generate and build a redstone circuit |
+| `/vb image [prompt]` | Open native image picker and build from image + optional notes |
+| `/vb apikey anthropic <key>` | Set Anthropic API key |
+| `/vb apikey openai <key>` | Set OpenAI API key |
+| `/vb model` | Show current model + provider |
+| `/vb model <name>` | Switch model live in-game |
 | `/vb confirm` | Accept reviewed build and enter placement preview |
 | `/vb cancel` | Cancel current flow and return |
-| `/vb connect` | Manual reconnect |
-| `/vb disconnect` | Disconnect |
 
-Ghost preview controls after `/vb confirm`:
+## Live model switching (Anthropic + OpenAI) 🔁
+
+You can hot-swap models live in Minecraft chat:
+
+- `/vb model` shows current model and provider
+- `/vb model <name>` switches immediately
+- provider is auto-detected from model id (`claude-*` => Anthropic, `gpt-*` / `o*` => OpenAI)
+- the matching API key is selected automatically
+
+## Ghost preview controls 👻
 
 - left click: place
 - `R`: rotate clockwise
@@ -58,40 +65,44 @@ Ghost preview controls after `/vb confirm`:
 ## Requirements ✅
 
 - Java 21
-- Bun 1.3+
-- Minecraft 1.21.11 with Fabric Loader 0.18.4+
+- Minecraft 1.21.11
+- Fabric Loader 0.18.4+
 - Fabric API
-- WorldEdit for Fabric (runtime dependency)
-- ANTHROPIC_API_KEY
+- WorldEdit for Fabric 7.4.0
+- Anthropic and/or OpenAI API key
 
 ## Quick start 🚀
 
-### 1) Start backend
-
-```bash
-cd server
-bun install
-export ANTHROPIC_API_KEY=your_key_here
-bun run start
-```ws://localhost:8080`.
-
-Defaults:
-
-- WebSocket: `ws://localhost:8080`
-- Image web app: `http://localhost:8787/image-input`
-
-### 2) Build and install mod
+### 1) Build the mod
 
 ```bash
 cd mod
-bash ./gradlew build
+./gradlew build
 ```
 
-Install:
+Output jar:
 
 - `mod/build/libs/vibe-build-1.0.0.jar`
-- plus Fabric API and WorldEdit (matching MC 1.21.11)
 
-### 3) Launch Minecraft
+### 2) Install dependencies
 
-When you join a world, the mod auto-connects to the websocket: `ws://localhost:8080`.
+Put these in your Minecraft `mods` folder:
+
+- `vibe-build-1.0.0.jar`
+- Fabric API
+- WorldEdit for Fabric (MC 1.21.11)
+
+### 3) Configure model access in game
+
+```text
+/vb apikey anthropic <key>
+/vb apikey openai <key>   (only needed for OpenAI models)
+/vb model <model-name>
+```
+
+Examples:
+
+```text
+/vb model claude-opus-4-6
+/vb model gpt-5
+```

@@ -12,6 +12,7 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.vibebuild.ChatUtil;
 import com.vibebuild.Vibebuild;
 import com.vibebuild.ai.BuildPipeline;
+import com.vibebuild.redstone.ai.RedstonePipeline;
 import com.vibebuild.config.VibeBuildConfig;
 import com.vibebuild.network.CancelPreviewPayload;
 import com.vibebuild.network.OpenImageDialogPayload;
@@ -172,6 +173,11 @@ public class VbCommand {
                 .then(Commands.literal("confirm")
                     .executes(VbCommand::confirm))
 
+                // /vb redstone <prompt...>
+                .then(Commands.literal("redstone")
+                    .then(Commands.argument("prompt", StringArgumentType.greedyString())
+                        .executes(VbCommand::redstonePrompt)))
+
                 // /vb <prompt...>
                 .then(Commands.argument("prompt", StringArgumentType.greedyString())
                     .executes(VbCommand::prompt))
@@ -265,8 +271,8 @@ public class VbCommand {
 
         session.phase = BuildSession.Phase.CONNECTED;
 
-        player.sendSystemMessage(ChatUtil.vb("Build cancelled. Returned to your world."));
-        Vibebuild.LOGGER.info("[VB] {} cancelled their build", name);
+        player.sendSystemMessage(ChatUtil.vb(capitalizedAgentNoun(session) + " cancelled. Returned to your world."));
+        Vibebuild.LOGGER.info("[VB] {} cancelled their {}", name, agentNoun(session));
         return 1;
     }
 
@@ -283,7 +289,7 @@ public class VbCommand {
         }
 
         if (session.phase != BuildSession.Phase.REVIEWING) {
-            player.sendSystemMessage(ChatUtil.vb("Nothing to confirm. Build something first with /vb <prompt>."));
+            player.sendSystemMessage(ChatUtil.vb("Nothing to confirm. Start one with /vb <prompt> or /vb redstone <prompt>."));
             return 0;
         }
 
@@ -295,12 +301,12 @@ public class VbCommand {
 
         session.phase = BuildSession.Phase.PREVIEWING;
 
-        player.sendSystemMessage(ChatUtil.vb("Build confirmed! Use the ghost preview to place it."));
+        player.sendSystemMessage(ChatUtil.vb(capitalizedAgentNoun(session) + " confirmed! Use the ghost preview to place it."));
         player.sendSystemMessage(ChatUtil.vb("Left-click to place, R to rotate, PgUp/PgDn to adjust height."));
 
         Vibebuild.getInstance().activateClientPreview(player);
 
-        Vibebuild.LOGGER.info("[VB] {} confirmed their build", name);
+        Vibebuild.LOGGER.info("[VB] {} confirmed their {}", name, agentNoun(session));
         return 1;
     }
 
@@ -343,8 +349,69 @@ public class VbCommand {
 
         player.sendSystemMessage(ChatUtil.vb("Sending: " + prompt));
 
+        // Track which agent started the current flow so shared commands
+        // (/vb confirm, /vb cancel) can render accurate UX text.
+        session.activeAgent = BuildSession.AgentType.BUILD;
+
         // Launch the AI pipeline on a background thread
         BuildPipeline.runAsync(player, session, prompt, playerPos);
         return 1;
+    }
+
+    private static int redstonePrompt(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = ctx.getSource().getPlayer();
+        if (player == null) return 0;
+
+        String name   = player.getName().getString();
+        String prompt = StringArgumentType.getString(ctx, "prompt");
+
+        BuildSession session = Vibebuild.getInstance().getSessions().get(name);
+
+        if (session == null) {
+            player.sendSystemMessage(ChatUtil.vbError("No active session. Rejoin the server."));
+            return 0;
+        }
+
+        if (session.phase != BuildSession.Phase.CONNECTED && session.phase != BuildSession.Phase.REVIEWING) {
+            player.sendSystemMessage(ChatUtil.vb("Busy — wait for the current build to finish, or /vb cancel."));
+            return 0;
+        }
+
+        // Determine player position (use saved pos if already in build dimension)
+        double x, y, z;
+        if (session.inVibeWorldSession) {
+            x = session.originalX;
+            y = session.originalY;
+            z = session.originalZ;
+        } else {
+            x = player.getX();
+            y = player.getY();
+            z = player.getZ();
+        }
+
+        BlockPos playerPos = new BlockPos(
+                (int) Math.round(x),
+                (int) Math.round(y),
+                (int) Math.round(z)
+        );
+
+        player.sendSystemMessage(ChatUtil.vb("Redstone: " + prompt));
+
+        // Mark redstone as the active agent for downstream shared commands.
+        session.activeAgent = BuildSession.AgentType.REDSTONE;
+
+        // Launch the redstone AI pipeline on a background thread
+        RedstonePipeline.runAsync(player, session, prompt, playerPos);
+        return 1;
+    }
+
+    /** Agent-specific noun used in shared command messages. */
+    private static String agentNoun(BuildSession session) {
+        return session.activeAgent == BuildSession.AgentType.REDSTONE ? "circuit" : "build";
+    }
+
+    /** Capitalized variant of {@link #agentNoun(BuildSession)} for sentence starts. */
+    private static String capitalizedAgentNoun(BuildSession session) {
+        return session.activeAgent == BuildSession.AgentType.REDSTONE ? "Circuit" : "Build";
     }
 }

@@ -5,6 +5,7 @@ import com.vibebuild.config.VibeBuildConfig;
 import com.vibebuild.dimension.BuildDimension;
 import com.vibebuild.executor.ToolExecutor;
 import com.vibebuild.ai.BuildPipeline;
+import com.vibebuild.redstone.executor.RedstoneToolExecutor;
 import com.vibebuild.network.ActivatePreviewPayload;
 import com.vibebuild.network.CancelPreviewPayload;
 import com.vibebuild.network.ImagePromptPayload;
@@ -36,24 +37,27 @@ public class Vibebuild implements ModInitializer {
 
     private final Map<String, BuildSession> sessions = new ConcurrentHashMap<>();
 
-    private MinecraftServer  server;
-    private BuildDimension   buildDimension;
-    private ToolExecutor     toolExecutor;
-    private SchematicManager schematicManager;
+    private MinecraftServer      server;
+    private BuildDimension       buildDimension;
+    private ToolExecutor         toolExecutor;
+    private RedstoneToolExecutor redstoneToolExecutor;
+    private SchematicManager     schematicManager;
 
-    public Map<String, BuildSession> getSessions()         { return sessions; }
-    public MinecraftServer           getServer()           { return server; }
-    public BuildDimension            getBuildDimension()   { return buildDimension; }
-    public ToolExecutor              getToolExecutor()     { return toolExecutor; }
-    public SchematicManager          getSchematicManager() { return schematicManager; }
+    public Map<String, BuildSession> getSessions()              { return sessions; }
+    public MinecraftServer           getServer()                { return server; }
+    public BuildDimension            getBuildDimension()        { return buildDimension; }
+    public ToolExecutor              getToolExecutor()          { return toolExecutor; }
+    public RedstoneToolExecutor      getRedstoneToolExecutor()  { return redstoneToolExecutor; }
+    public SchematicManager          getSchematicManager()      { return schematicManager; }
 
     @Override
     public void onInitialize() {
         INSTANCE = this;
 
         VibeBuildConfig.load();
-        toolExecutor     = new ToolExecutor();
-        schematicManager = new SchematicManager();
+        toolExecutor         = new ToolExecutor();
+        redstoneToolExecutor = new RedstoneToolExecutor();
+        schematicManager     = new SchematicManager();
 
         // Register the S2C payload types so the game knows how to encode/decode them
         PayloadTypeRegistry.playS2C().register(
@@ -112,6 +116,7 @@ public class Vibebuild implements ModInitializer {
                     );
 
                     player.sendSystemMessage(ChatUtil.vb("Image received! Starting build..."));
+                    session.activeAgent = BuildSession.AgentType.BUILD;
                     BuildPipeline.runAsync(player, session, payload.prompt(),
                             payload.imageBytes(), payload.mimeType(), playerPos);
                 }

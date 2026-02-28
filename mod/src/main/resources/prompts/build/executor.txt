@@ -31,9 +31,16 @@ For furniture and interior details, use individual we_set calls for each piece:
 - Use the exact coordinates from the step details.
 - You MUST call at least one tool for every step before ending your response.
 - Call tools confidently. Every call executes. Trust results and move on.
-- Don't retry failed commands. Don't second-guess.
+- Do not blindly retry the exact same failed command. If a tool fails, issue a corrected call with changed arguments.
 - Keep text output minimal — a brief note about what you're building is fine, but tool calls are the primary output.
 - NEVER use gravity-affected blocks: no sand, gravel, red_sand, concrete_powder, or anvils. These fall and destroy builds. Use concrete (not powder), terracotta, wool, or stone variants instead.
+
+## Verification tools
+
+- Use `read_block` to confirm exact block state at one coordinate when orientation/support matters.
+- Use `read_region` to audit existing nearby work before destructive edits.
+- `read_region` returns `countsByBlock`, `nonAirCount`, `returnedCount`, `limit`, and `truncated`.
+- If `truncated=true`, narrow the region or increase `maxBlocks` to inspect more entries.
 
 ## Stair facing — get this right
 

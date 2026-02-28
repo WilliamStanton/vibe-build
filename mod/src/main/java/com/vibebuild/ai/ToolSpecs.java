@@ -266,6 +266,23 @@ public class ToolSpecs {
                                 .addStringProperty("to", "Pattern to replace with")
                                 .required("position", "radius", "to").build()),
 
+                // Read tools
+                tool("read_block",
+                        "Read one block at a position for verification. "
+                                + "Returns structured JSON with x/y/z, isAir, blockId, and full state string.",
+                        JsonObjectSchema.builder()
+                                .addProperty("position", vec3("Position to read"))
+                                .required("position").build()),
+
+                tool("read_region",
+                        "Read non-air blocks in a cuboid region for auditing existing work. "
+                                + "Returns structured JSON with countsByBlock, returned blocks, and truncation metadata.",
+                        JsonObjectSchema.builder()
+                                .addProperty("pos1", vec3("First corner"))
+                                .addProperty("pos2", vec3("Opposite corner"))
+                                .addIntegerProperty("maxBlocks", "Maximum block entries to return (default 1000, max 5000)")
+                                .required("pos1", "pos2").build()),
+
                 // Sign placement
                 tool("place_sign",
                         "Place a sign with custom text. Use this instead of set for signs.",

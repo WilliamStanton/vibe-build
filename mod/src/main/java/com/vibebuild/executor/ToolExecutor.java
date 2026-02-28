@@ -17,6 +17,7 @@ import com.sk89q.worldedit.world.World;
 import com.vibebuild.Vibebuild;
 import com.vibebuild.session.BuildSession;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -31,18 +32,30 @@ import net.minecraft.world.level.block.entity.SignText;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Routes tool_call messages from the vibe-build server to the WorldEdit Java API.
  */
 public class ToolExecutor {
 
+    /** Read-only inspection tools must never affect schematic/preview bounds. */
+    private static final Set<String> READ_ONLY_TOOLS = Set.of("read_block", "read_region");
+
     public JsonObject execute(ServerPlayer player, BuildSession session, String toolName, JsonObject args) {
         // Handle non-WorldEdit tools that use native Minecraft API
-        if (toolName.equals("place_sign")) {
+        if (toolName.equals("place_sign") || toolName.equals("read_block") || toolName.equals("read_region")) {
             try {
-                String msg = execPlaceSign(player, args);
+                String msg = switch (toolName) {
+                    case "place_sign" -> execPlaceSign(player, args);
+                    case "read_block" -> execReadBlock(player, args);
+                    case "read_region" -> execReadRegion(player, args);
+                    default -> throw new UnsupportedOperationException("Unknown tool: " + toolName);
+                };
                 return result(true, msg);
             } catch (Exception e) {
                 Vibebuild.LOGGER.error("[VB] Tool '{}' failed: {}", toolName, e.getMessage(), e);
@@ -68,7 +81,14 @@ public class ToolExecutor {
         }
     }
 
+    /**
+     * Expand session bounds for mutating tools only.
+     */
     public void updateBounds(BuildSession session, String toolName, JsonObject args) {
+        if (READ_ONLY_TOOLS.contains(toolName)) {
+            return;
+        }
+
         try {
             BlockPos p1 = pos(args, "pos1");
             BlockPos p2 = pos(args, "pos2");
@@ -399,6 +419,91 @@ public class ToolExecutor {
 
     // ── Sign Placement (native Minecraft API) ──
 
+    /**
+     * Read a single world block and return structured JSON for agent verification.
+     */
+    private String execReadBlock(ServerPlayer player, JsonObject a) {
+        ServerLevel level = (ServerLevel) player.level();
+        BlockPos position = pos(a, "position");
+        BlockState state = level.getBlockState(position);
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("x", position.getX());
+        payload.addProperty("y", position.getY());
+        payload.addProperty("z", position.getZ());
+        payload.addProperty("isAir", state.isAir());
+        payload.addProperty("blockId", blockId(state));
+        payload.addProperty("state", formatBlockState(state));
+        return payload.toString();
+    }
+
+    /**
+     * Read non-air blocks in a region with counts and truncation metadata.
+     */
+    private String execReadRegion(ServerPlayer player, JsonObject a) {
+        ServerLevel level = (ServerLevel) player.level();
+        BlockPos p1 = pos(a, "pos1");
+        BlockPos p2 = pos(a, "pos2");
+        int limit = a.has("maxBlocks") ? Math.max(1, Math.min(5000, a.get("maxBlocks").getAsInt())) : 1000;
+
+        int minX = Math.min(p1.getX(), p2.getX()), maxX = Math.max(p1.getX(), p2.getX());
+        int minY = Math.min(p1.getY(), p2.getY()), maxY = Math.max(p1.getY(), p2.getY());
+        int minZ = Math.min(p1.getZ(), p2.getZ()), maxZ = Math.max(p1.getZ(), p2.getZ());
+
+        JsonArray blocks = new JsonArray();
+        Map<String, Integer> countsByBlock = new TreeMap<>();
+        Set<Long> seen = new HashSet<>();
+        int nonAirCount = 0;
+        boolean truncated = false;
+
+        for (int x = minX; x <= maxX; x++) {
+            for (int y = minY; y <= maxY; y++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    BlockPos pos = new BlockPos(x, y, z);
+                    BlockState state = level.getBlockState(pos);
+                    if (state.isAir()) continue;
+
+                    nonAirCount++;
+                    String blockId = blockId(state);
+                    countsByBlock.merge(blockId, 1, Integer::sum);
+
+                    if (blocks.size() >= limit) {
+                        truncated = true;
+                        continue;
+                    }
+
+                    // Defensive de-duplication in case of future scan-path changes.
+                    if (!seen.add(pos.asLong())) {
+                        continue;
+                    }
+
+                    JsonObject entry = new JsonObject();
+                    entry.addProperty("x", x);
+                    entry.addProperty("y", y);
+                    entry.addProperty("z", z);
+                    entry.addProperty("blockId", blockId);
+                    entry.addProperty("state", formatBlockState(state));
+                    blocks.add(entry);
+                }
+            }
+        }
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("limit", limit);
+        payload.addProperty("nonAirCount", nonAirCount);
+        payload.addProperty("returnedCount", blocks.size());
+        payload.addProperty("truncated", truncated);
+
+        JsonObject counts = new JsonObject();
+        for (Map.Entry<String, Integer> entry : countsByBlock.entrySet()) {
+            counts.addProperty(entry.getKey(), entry.getValue());
+        }
+        payload.add("countsByBlock", counts);
+        payload.add("blocks", blocks);
+
+        return payload.toString();
+    }
+
     private String execPlaceSign(ServerPlayer player, JsonObject a) {
         ServerLevel level = (ServerLevel) player.level();
         BlockPos signPos = pos(a, "position");
@@ -522,6 +627,34 @@ public class ToolExecutor {
             case "gray"       -> DyeColor.GRAY;
             default           -> DyeColor.BLACK;
         };
+    }
+
+    /** Return stable namespaced block id, e.g. minecraft:stone. */
+    private String blockId(BlockState state) {
+        return BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+    }
+
+    /**
+     * Compact block-state string for LLM consumption.
+     * Example: minecraft:repeater[delay=2,facing=north]
+     */
+    private String formatBlockState(BlockState state) {
+        String full = state.toString();
+        int start = full.indexOf('{');
+        int end = full.indexOf('}');
+        if (start >= 0 && end > start) {
+            String id = full.substring(start + 1, end);
+            int propStart = full.indexOf('[', end);
+            int propEnd = full.lastIndexOf(']');
+            if (propStart >= 0 && propEnd > propStart) {
+                String props = full.substring(propStart + 1, propEnd);
+                if (!props.isEmpty()) {
+                    return id + "[" + props + "]";
+                }
+            }
+            return id;
+        }
+        return full;
     }
 
     // ── Helpers ──

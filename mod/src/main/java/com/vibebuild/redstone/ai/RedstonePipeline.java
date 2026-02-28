@@ -1,9 +1,12 @@
-package com.vibebuild.ai;
+package com.vibebuild.redstone.ai;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.vibebuild.ChatUtil;
 import com.vibebuild.Vibebuild;
+import com.vibebuild.ai.ChatModelFactory;
+import com.vibebuild.ai.Plan;
+import com.vibebuild.ai.PromptLoader;
 import com.vibebuild.config.VibeBuildConfig;
 import com.vibebuild.session.BuildSession;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -17,42 +20,25 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * Orchestrates the three-stage AI build pipeline entirely within the mod:
+ * Orchestrates the three-stage AI redstone pipeline:
  * Planner → Executor → Finalizer.
  *
- * Runs on a background thread. Tool calls are dispatched to the server thread.
+ * Mirrors BuildPipeline but uses redstone-specific prompts, tools, and executor.
  */
-public class BuildPipeline {
+public class RedstonePipeline {
 
     private static final Gson GSON = new Gson();
 
     /**
-     * Start the pipeline asynchronously for the given player and text prompt.
+     * Start the redstone pipeline asynchronously for the given player and prompt.
      */
     public static void runAsync(ServerPlayer player, BuildSession session, String prompt, BlockPos playerPos) {
-        session.imageBase64 = null;
-        session.imageMimeType = null;
-        launchAsync(player, session, prompt, playerPos);
-    }
-
-    /**
-     * Start the pipeline asynchronously with an image + text prompt.
-     */
-    public static void runAsync(ServerPlayer player, BuildSession session, String prompt,
-                                byte[] imageBytes, String mimeType, BlockPos playerPos) {
-        session.imageBase64 = Base64.getEncoder().encodeToString(imageBytes);
-        session.imageMimeType = mimeType;
-        launchAsync(player, session, prompt, playerPos);
-    }
-
-    private static void launchAsync(ServerPlayer player, BuildSession session, String prompt, BlockPos playerPos) {
         if (session.processingPrompt) {
             player.sendSystemMessage(ChatUtil.vbError("Build already in progress. Wait or /vb cancel."));
             return;
@@ -66,7 +52,7 @@ public class BuildPipeline {
             try {
                 run(playerName, session, prompt, playerPos);
             } catch (Throwable e) {
-                Vibebuild.LOGGER.error("[VB] Pipeline error: {} - {}", e.getClass().getName(), e.getMessage(), e);
+                Vibebuild.LOGGER.error("[VB-RS] Pipeline error: {} - {}", e.getClass().getName(), e.getMessage(), e);
                 runOnServerThread(() -> {
                     ServerPlayer p = getPlayer(playerName);
                     if (p != null) {
@@ -94,14 +80,15 @@ public class BuildPipeline {
         }
 
         VibeBuildConfig.Provider provider = VibeBuildConfig.getProvider();
-        Vibebuild.LOGGER.info("[VB] Building ChatModel with model='{}' provider={} apiKey={}...",
+
+        Vibebuild.LOGGER.info("[VB-RS] Building ChatModel with model='{}' provider={} apiKey={}...",
                 VibeBuildConfig.getModel(), provider, apiKey.substring(0, Math.min(8, apiKey.length())) + "...");
         ChatModel model;
         try {
             model = ChatModelFactory.create(provider, apiKey, VibeBuildConfig.getModel(), 32768);
-            Vibebuild.LOGGER.info("[VB] ChatModel built successfully");
+            Vibebuild.LOGGER.info("[VB-RS] ChatModel built successfully");
         } catch (Exception e) {
-            Vibebuild.LOGGER.error("[VB] Failed to build ChatModel: {} - {}", e.getClass().getName(), e.getMessage(), e);
+            Vibebuild.LOGGER.error("[VB-RS] Failed to build ChatModel: {} - {}", e.getClass().getName(), e.getMessage(), e);
             throw e;
         }
 
@@ -111,7 +98,7 @@ public class BuildPipeline {
             if (player == null) throw new RuntimeException("Player disconnected");
 
             session.phase = BuildSession.Phase.PLANNING;
-            player.sendSystemMessage(ChatUtil.vb("Planning your build..."));
+            player.sendSystemMessage(ChatUtil.vb("Planning your redstone circuit..."));
 
             if (!session.inVibeWorldSession) {
                 session.inVibeWorldSession = true;
@@ -125,44 +112,10 @@ public class BuildPipeline {
 
         long t0 = System.currentTimeMillis();
 
-        String buildRequest = prompt;
-        boolean imageMode = session.imageBase64 != null;
-        boolean plannerShouldUseRawImage = session.imageBase64 != null;
-
-        // ── STAGE 0: IMAGE → BUILD REQUEST ──
-        if (session.imageBase64 != null) {
-            runOnServerThread(() -> {
-                ServerPlayer player = getPlayer(playerName);
-                if (player != null) {
-                    player.sendSystemMessage(ChatUtil.vb("Analyzing reference image..."));
-                }
-            });
-
-            long imagePromptStart = System.currentTimeMillis();
-            try {
-                String generatedRequest = runImageToBuildPrompt(
-                        model,
-                        prompt,
-                        session.imageBase64,
-                        session.imageMimeType
-                );
-
-                if (!generatedRequest.isBlank()) {
-                    buildRequest = generatedRequest;
-                    plannerShouldUseRawImage = false;
-                    Vibebuild.LOGGER.info("[VB] [IMAGE] Converted image + notes to build request in {}ms",
-                            System.currentTimeMillis() - imagePromptStart);
-                }
-            } catch (Exception e) {
-                Vibebuild.LOGGER.warn("[VB] [IMAGE] Prompt synthesis failed, falling back to direct multimodal planning: {}",
-                        e.getMessage());
-            }
-        }
-
         // ── STAGE 1: PLANNER ──
-        Vibebuild.LOGGER.info("[VB] [PLANNER] Starting for '{}' with model '{}'", buildRequest, VibeBuildConfig.getModel());
-        Plan plan = runPlanner(model, session, buildRequest, playerPos, plannerShouldUseRawImage, imageMode);
-        Vibebuild.LOGGER.info("[VB] [PLANNER] Done in {}ms — Plan: '{}' with {} steps",
+        Vibebuild.LOGGER.info("[VB-RS] [PLANNER] Starting for '{}' with model '{}'", prompt, VibeBuildConfig.getModel());
+        Plan plan = runPlanner(model, session, prompt, playerPos);
+        Vibebuild.LOGGER.info("[VB-RS] [PLANNER] Done in {}ms — Plan: '{}' with {} steps",
                 System.currentTimeMillis() - t0, plan.planTitle, plan.steps.size());
 
         checkCancelled(session);
@@ -178,11 +131,11 @@ public class BuildPipeline {
                 session.hasBeenPositioned = true;
             }
 
-            player.sendSystemMessage(ChatUtil.vb("Planning complete: " + plan.steps.size() + " features to build."));
+            player.sendSystemMessage(ChatUtil.vb("Circuit planned: " + plan.steps.size() + " subsystems to build."));
         });
 
         // ── STAGE 2: EXECUTOR ──
-        Vibebuild.LOGGER.info("[VB] [EXECUTOR] Starting {} steps", plan.steps.size());
+        Vibebuild.LOGGER.info("[VB-RS] [EXECUTOR] Starting {} steps", plan.steps.size());
         int totalToolCount = 0;
 
         for (int i = 0; i < plan.steps.size(); i++) {
@@ -200,16 +153,16 @@ public class BuildPipeline {
                 player.sendSystemMessage(ChatUtil.vb("[" + stepNum + "/" + totalSteps + "] " + step.feature));
             });
 
-            int stepTools = runExecutor(model, playerName, session, buildRequest, plan, step, stepNum, totalSteps, stepIdx);
+            int stepTools = runExecutor(model, playerName, session, prompt, plan, step, stepNum, totalSteps, stepIdx);
             totalToolCount += stepTools;
-            Vibebuild.LOGGER.info("[VB] [STEP {}/{}] {} — {} tools", stepNum, totalSteps, step.id, stepTools);
+            Vibebuild.LOGGER.info("[VB-RS] [STEP {}/{}] {} — {} tools", stepNum, totalSteps, step.id, stepTools);
         }
 
         // ── STAGE 3: FINALIZER ──
         long finalizerStart = System.currentTimeMillis();
-        Vibebuild.LOGGER.info("[VB] [FINALIZER] Generating summary...");
-        String summary = runFinalizer(model, buildRequest, plan, totalToolCount);
-        Vibebuild.LOGGER.info("[VB] [FINALIZER] Done in {}ms", System.currentTimeMillis() - finalizerStart);
+        Vibebuild.LOGGER.info("[VB-RS] [FINALIZER] Generating summary...");
+        String summary = runFinalizer(model, prompt, plan, totalToolCount);
+        Vibebuild.LOGGER.info("[VB-RS] [FINALIZER] Done in {}ms", System.currentTimeMillis() - finalizerStart);
 
         long elapsed = (System.currentTimeMillis() - t0) / 1000;
         int finalToolCount = totalToolCount;
@@ -228,131 +181,71 @@ public class BuildPipeline {
             session.phase = BuildSession.Phase.REVIEWING;
 
             player.sendSystemMessage(ChatUtil.vb(String.format(
-                    "Build complete! %d steps, %d commands in %ds.",
+                    "Circuit complete! %d subsystems, %d commands in %ds.",
                     plan.steps.size(), finalToolCount, elapsed)));
 
             if (saved) {
                 Vibebuild.getInstance().sendBuildBoundsToClient(player, session);
-                player.sendSystemMessage(ChatUtil.vb("Fly around to review your build."));
+                player.sendSystemMessage(ChatUtil.vb("Fly around to review your circuit."));
                 player.sendSystemMessage(ChatUtil.vb("Type /vb confirm to accept, /vb cancel to discard."));
             } else {
                 player.sendSystemMessage(ChatUtil.vbError("Could not save schematic. Use /vb cancel to return."));
             }
         });
 
-        Vibebuild.LOGGER.info("[VB] [DONE] {} commands across {} features in {}s",
+        Vibebuild.LOGGER.info("[VB-RS] [DONE] {} commands across {} subsystems in {}s",
                 finalToolCount, plan.steps.size(), elapsed);
     }
 
     // ── Stage implementations ──
 
-    private static Plan runPlanner(ChatModel model, BuildSession session, String prompt,
-                                   BlockPos pos, boolean includeRawImageInput,
-                                   boolean imageMode) {
+    private static Plan runPlanner(ChatModel model, BuildSession session, String prompt, BlockPos pos) {
         String plannerUserText = "Player position: " + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + "\n"
-                + "Build request: " + prompt;
+                + "Circuit request: " + prompt;
 
-        // Planner history persists across reprompts so the planner can refine
-        // prior work instead of restarting from scratch every time.
-        session.plannerHistory.add(new BuildSession.HistoryMessage("user", plannerUserText));
+        // Redstone planning keeps its own history so circuit reprompts do not
+        // pollute or depend on normal build-planner context.
+        session.redstonePlannerHistory.add(new BuildSession.HistoryMessage("user", plannerUserText));
 
         List<ChatMessage> messages = new ArrayList<>();
-        messages.add(SystemMessage.from(PromptLoader.load("build/spatial.txt")));
-        messages.add(SystemMessage.from(PromptLoader.load("build/planner.txt")));
-        if (imageMode) {
-            messages.add(SystemMessage.from(PromptLoader.load("build/planner-image-derived.txt")));
+        messages.add(SystemMessage.from(PromptLoader.load("redstone/spatial.txt")));
+        messages.add(SystemMessage.from(PromptLoader.load("redstone/planner.txt")));
+        for (BuildSession.HistoryMessage msg : session.redstonePlannerHistory) {
+            if (msg.role.equals("user")) messages.add(UserMessage.from(msg.content));
+            else messages.add(AiMessage.from(msg.content));
         }
 
-        // Add history — all text-only except possibly the last user message which may have an image
-        for (int i = 0; i < session.plannerHistory.size(); i++) {
-            BuildSession.HistoryMessage msg = session.plannerHistory.get(i);
-            boolean isLastUserMsg = msg.role.equals("user") && i == session.plannerHistory.size() - 1;
+        ToolSpecification submitPlan = RedstoneToolSpecs.submitPlan();
 
-            if (msg.role.equals("user")) {
-                if (includeRawImageInput && isLastUserMsg && session.imageBase64 != null) {
-                    // Multimodal: text + image
-                    messages.add(UserMessage.from(
-                            TextContent.from(msg.content),
-                            ImageContent.from(session.imageBase64, session.imageMimeType)
-                    ));
-                } else {
-                    messages.add(UserMessage.from(msg.content));
-                }
-            } else {
-                messages.add(AiMessage.from(msg.content));
-            }
-        }
-
-        ToolSpecification submitPlan = ToolSpecs.submitPlan();
-
-        Vibebuild.LOGGER.info("[VB] [PLANNER] Sending chat request ({} messages)...", messages.size());
+        Vibebuild.LOGGER.info("[VB-RS] [PLANNER] Sending chat request ({} messages)...", messages.size());
         ChatResponse response = model.chat(ChatRequest.builder()
                 .messages(messages)
                 .toolSpecifications(List.of(submitPlan))
                 .build());
-        Vibebuild.LOGGER.info("[VB] [PLANNER] Got response. hasToolCalls={}", response.aiMessage().hasToolExecutionRequests());
+        Vibebuild.LOGGER.info("[VB-RS] [PLANNER] Got response. hasToolCalls={}", response.aiMessage().hasToolExecutionRequests());
 
         AiMessage aiMessage = response.aiMessage();
-        String planJson;
-
-        if (aiMessage.hasToolExecutionRequests()) {
-            ToolExecutionRequest toolCall = aiMessage.toolExecutionRequests().get(0);
-            if (!toolCall.name().equals("submit_plan")) {
-                throw new RuntimeException("Planner called unexpected tool: " + toolCall.name());
-            }
-            planJson = toolCall.arguments();
-        } else if (aiMessage.text() != null && aiMessage.text().contains("\"planTitle\"")) {
-            // Some models (e.g. GPT) return the plan as text instead of a tool call — parse it directly
-            Vibebuild.LOGGER.warn("[VB] [PLANNER] Model returned plan as text instead of tool call, parsing directly");
-            String text = aiMessage.text().trim();
-            // Strip markdown code fences if present
-            if (text.startsWith("```")) {
-                int firstNewline = text.indexOf('\n');
-                int lastFence = text.lastIndexOf("```");
-                if (firstNewline != -1 && lastFence > firstNewline) {
-                    text = text.substring(firstNewline + 1, lastFence).trim();
-                }
-            }
-            planJson = text;
-        } else {
-            throw new RuntimeException("Planner did not return a plan. Response: " +
+        if (!aiMessage.hasToolExecutionRequests()) {
+            throw new RuntimeException("Planner did not call submit_plan. Response: " +
                     (aiMessage.text() != null ? aiMessage.text().substring(0, Math.min(200, aiMessage.text().length())) : "empty"));
         }
 
-        Plan plan = Plan.fromJson(planJson);
+        ToolExecutionRequest toolCall = aiMessage.toolExecutionRequests().get(0);
+        if (!toolCall.name().equals("submit_plan")) {
+            throw new RuntimeException("Planner called unexpected tool: " + toolCall.name());
+        }
+
+        Plan plan = Plan.fromJson(toolCall.arguments());
 
         // Record in history so follow-up prompts have context
-        String planSummary = "Plan: \"" + plan.planTitle + "\" at (" +
+        String planSummary = "Circuit plan: \"" + plan.planTitle + "\" at (" +
                 plan.origin.x + ", " + plan.origin.y + ", " + plan.origin.z + ")\n" +
                 plan.steps.stream()
                         .map(s -> "- " + s.id + ": " + s.feature + " — " + s.details)
                         .collect(Collectors.joining("\n"));
-        session.plannerHistory.add(new BuildSession.HistoryMessage("assistant", planSummary));
+        session.redstonePlannerHistory.add(new BuildSession.HistoryMessage("assistant", planSummary));
 
         return plan;
-    }
-
-    private static String runImageToBuildPrompt(ChatModel model, String playerNotes,
-                                                String imageBase64, String imageMimeType) {
-        String notes = (playerNotes == null || playerNotes.isBlank()) ? "none" : playerNotes;
-        String userText = "Player notes: " + notes + "\n"
-                + "Generate one concrete Minecraft build request based on this reference image.";
-
-        ChatResponse response = model.chat(ChatRequest.builder()
-                .messages(List.of(
-                        SystemMessage.from(PromptLoader.load("build/image.txt")),
-                        UserMessage.from(
-                                TextContent.from(userText),
-                                ImageContent.from(imageBase64, imageMimeType)
-                        )
-                ))
-                .build());
-
-        String rewritten = response.aiMessage().text() != null ? response.aiMessage().text().trim() : "";
-        if (rewritten.isBlank()) {
-            throw new RuntimeException("Image prompt stage returned empty text");
-        }
-        return rewritten;
     }
 
     private static int runExecutor(ChatModel model, String playerName, BuildSession session,
@@ -372,22 +265,22 @@ public class BuildPipeline {
             recentSteps = sb.toString();
         }
 
-        String userText = "Player request: " + prompt + "\n"
-                + "Build origin: " + plan.origin.x + ", " + plan.origin.y + ", " + plan.origin.z + "\n"
-                + "All completed steps: " + recentSteps + "\n"
+        String userText = "Circuit request: " + prompt + "\n"
+                + "Circuit origin: " + plan.origin.x + ", " + plan.origin.y + ", " + plan.origin.z + "\n"
+                + "All completed subsystems: " + recentSteps + "\n"
                 + "\n"
-                + "Current step (" + stepNum + "/" + totalSteps + "):\n"
+                + "Current subsystem (" + stepNum + "/" + totalSteps + "):\n"
                 + "Feature: " + step.feature + "\n"
                 + "Details: " + step.details;
 
         List<ChatMessage> messages = new ArrayList<>();
-        messages.add(SystemMessage.from(PromptLoader.load("build/spatial.txt")));
-        messages.add(SystemMessage.from(PromptLoader.load("build/executor.txt")));
+        messages.add(SystemMessage.from(PromptLoader.load("redstone/spatial.txt")));
+        messages.add(SystemMessage.from(PromptLoader.load("redstone/executor.txt")));
         UserMessage executorUserMessage = UserMessage.from(userText);
         executorUserMessage.attributes().put("cache_control", "ephemeral");
         messages.add(executorUserMessage);
 
-        List<ToolSpecification> tools = ToolSpecs.worldEditTools();
+        List<ToolSpecification> tools = RedstoneToolSpecs.redstoneTools();
         int toolCount = 0;
 
         int loopIter = 0;
@@ -395,23 +288,21 @@ public class BuildPipeline {
             checkCancelled(session);
             loopIter++;
 
-            Vibebuild.LOGGER.info("[VB] [EXECUTOR] Step {}/{} — API call #{} ({} messages)...",
+            Vibebuild.LOGGER.info("[VB-RS] [EXECUTOR] Step {}/{} — API call #{} ({} messages)...",
                     stepNum, totalSteps, loopIter, messages.size());
             long callStart = System.currentTimeMillis();
             ChatResponse response = model.chat(ChatRequest.builder()
                     .messages(messages)
                     .toolSpecifications(tools)
                     .build());
-            Vibebuild.LOGGER.info("[VB] [EXECUTOR] API call #{} returned in {}ms, hasToolCalls={}",
+            Vibebuild.LOGGER.info("[VB-RS] [EXECUTOR] API call #{} returned in {}ms, hasToolCalls={}",
                     loopIter, System.currentTimeMillis() - callStart, response.aiMessage().hasToolExecutionRequests());
 
             AiMessage aiMessage = response.aiMessage();
             messages.add(aiMessage);
 
             if (!aiMessage.hasToolExecutionRequests()) {
-                Vibebuild.LOGGER.info("[VB] [EXECUTOR] Step {}/{} done — no more tool calls. AI text: {}",
-                        stepNum, totalSteps,
-                        aiMessage.text() != null ? aiMessage.text().substring(0, Math.min(100, aiMessage.text().length())) : "null");
+                Vibebuild.LOGGER.info("[VB-RS] [EXECUTOR] Step {}/{} done — no more tool calls.", stepNum, totalSteps);
                 break;
             }
 
@@ -419,11 +310,11 @@ public class BuildPipeline {
                 checkCancelled(session);
                 toolCount++;
 
-                Vibebuild.LOGGER.info("[VB]   [TOOL #{}] {} args={}", toolCount, request.name(),
+                Vibebuild.LOGGER.info("[VB-RS]   [TOOL #{}] {} args={}", toolCount, request.name(),
                         request.arguments() != null ? request.arguments().substring(0, Math.min(200, request.arguments().length())) : "null");
                 long toolStart = System.currentTimeMillis();
                 String result = executeToolOnServerThread(playerName, session, request.name(), request.arguments());
-                Vibebuild.LOGGER.info("[VB]   [TOOL #{}] {} completed in {}ms result={}",
+                Vibebuild.LOGGER.info("[VB-RS]   [TOOL #{}] {} completed in {}ms result={}",
                         toolCount, request.name(), System.currentTimeMillis() - toolStart,
                         result.substring(0, Math.min(200, result.length())));
                 messages.add(ToolExecutionResultMessage.from(request, result));
@@ -434,18 +325,17 @@ public class BuildPipeline {
     }
 
     private static String runFinalizer(ChatModel model, String prompt, Plan plan, int totalToolCount) {
-        String userText = "Player request: " + prompt + "\n"
-                + "Completed: " + plan.steps.size() + " features, " + totalToolCount + " total commands\n"
-                + "Features built: " + plan.steps.stream().map(s -> s.feature).collect(Collectors.joining(", "));
+        String userText = "Circuit request: " + prompt + "\n"
+                + "Completed: " + plan.steps.size() + " subsystems, " + totalToolCount + " total commands\n"
+                + "Subsystems built: " + plan.steps.stream().map(s -> s.feature).collect(Collectors.joining(", "));
 
-        // Finalizer is text-only by design: no tool calls, just a concise player-facing summary.
-        Vibebuild.LOGGER.info("[VB] [FINALIZER] Sending chat request...");
+        Vibebuild.LOGGER.info("[VB-RS] [FINALIZER] Sending chat request...");
         ChatResponse response = model.chat(ChatRequest.builder()
                 .messages(List.of(
-                        SystemMessage.from(PromptLoader.load("build/finalizer.txt")),
+                        SystemMessage.from(PromptLoader.load("redstone/finalizer.txt")),
                         UserMessage.from(userText)))
                 .build());
-        Vibebuild.LOGGER.info("[VB] [FINALIZER] Got response");
+        Vibebuild.LOGGER.info("[VB-RS] [FINALIZER] Got response");
 
         return response.aiMessage().text() != null ? response.aiMessage().text().trim() : "";
     }
@@ -457,8 +347,8 @@ public class BuildPipeline {
         CompletableFuture<String> future = new CompletableFuture<>();
         MinecraftServer server = Vibebuild.getInstance().getServer();
 
-        // World mutations must run on the Minecraft server thread. The AI loop
-        // stays async while tool execution is marshaled here and awaited.
+        // All redstone tool calls (native and delegated WorldEdit tools) are
+        // executed on the server thread for thread safety with world state.
         server.execute(() -> {
             try {
                 ServerPlayer player = getPlayer(playerName);
@@ -471,12 +361,12 @@ public class BuildPipeline {
                 }
 
                 JsonObject args = GSON.fromJson(argsJson, JsonObject.class);
-                JsonObject result = Vibebuild.getInstance().getToolExecutor()
+                JsonObject result = Vibebuild.getInstance().getRedstoneToolExecutor()
                         .execute(player, session, toolName, args);
 
                 boolean success = result.has("success") && result.get("success").getAsBoolean();
                 if (success) {
-                    Vibebuild.getInstance().getToolExecutor().updateBounds(session, toolName, args);
+                    Vibebuild.getInstance().getRedstoneToolExecutor().updateBounds(session, toolName, args);
                 }
                 if (!success) {
                     String errMsg = result.has("message") ? result.get("message").getAsString() : "unknown";
@@ -503,7 +393,7 @@ public class BuildPipeline {
 
     private static void checkCancelled(BuildSession session) {
         if (session.cancelled) {
-            throw new RuntimeException("Build cancelled by player");
+            throw new RuntimeException("Circuit build cancelled by player");
         }
     }
 

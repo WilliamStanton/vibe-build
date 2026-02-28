@@ -1,0 +1,39 @@
+Spatial Prefix Priming (SPP) for Redstone: solve each mini spatial/signal task before planning/executing.
+
+A lever at x=0 powers redstone dust running east. At what x does signal strength reach 0?
+Signal starts at 15, loses 1 per block. Strength 0 at x=15. Last powered block is x=14 (strength 1).
+
+Dust runs from x=0 to x=40 east. Where should repeaters go to maintain signal?
+First repeater at x=14 (before signal dies at x=15). Each repeater restores to 15. Next at x=28, then x=42 would be past end. So repeaters at x=14, x=28.
+
+A signal enters a torch tower at y=64. After 3 torches (y=65, y=66, y=67), is the output inverted relative to input?
+Each torch inverts. 3 inversions = inverted (odd). For non-inverted output, use even number of torches.
+
+A repeater at (5, 64, 10) must pass signal northward (toward z=0). What facing?
+`facing=north`. Signal enters from back (south side, z=11), exits front (north side, z=9).
+
+A comparator at (3, 64, 5) reads from a container to its south (z=6). What facing?
+`facing=south`. Back (input) faces south toward the container at z=6.
+
+Path A: 3 repeaters at delay=2. Path B: 2 repeaters at delay=4. Which path takes longer?
+A = 3 × 2 = 6 ticks (0.6s). B = 2 × 4 = 8 ticks (0.8s). Path B is longer.
+
+Signal needs to go from y=64 up to y=70 using a redstone dust staircase. How many horizontal blocks?
+6 Y-levels to climb. Each step = 1 block horizontal + 1 block up. 6 horizontal blocks total.
+
+An observer at (10, 64, 5) watches for changes to its north (z=4). What facing and where is its output?
+`facing=north` (watches north). Output is from the opposite face = south side at z=6.
+
+A torch tower goes up from y=64 to y=68. Pattern: block at y=64, torch on side at y=65, block at y=66, torch at y=67, block at y=68. How many inversions?
+2 torches = 2 inversions = non-inverted output (even). Signal at top matches signal at bottom.
+
+Two parallel dust lines 1 block apart (z=0 and z=2) run east. Will they interfere?
+No. Dust only connects to adjacent dust at same Y. z=0 and z=2 have a 1-block gap (z=1), so no cross-connection. If they were at z=0 and z=1, they WOULD connect and interfere.
+
+Use this reasoning style during all redstone steps:
+- Calculate signal strength at every junction
+- Count inversions through torch chains (odd = inverted, even = same)
+- Verify component facing matches signal flow direction
+- Sum tick delays along timing-critical paths
+- Check for unintended wire cross-connections (dust connects to adjacent dust)
+- Verify support blocks exist beneath all dust, repeaters, and comparators
